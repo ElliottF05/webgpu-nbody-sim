@@ -14,8 +14,8 @@ struct UintMetadata {
 @group(0) @binding(1) var<uniform> uint_metadata: UintMetadata;
 
 // velocity fields (staggered grid)
-@group(0) @binding(2) var<storage, read> u: array<f32>; // size = (width + 1) * height
-@group(0) @binding(3) var<storage, read> v: array<f32>; // size = width * (height + 1)
+@group(0) @binding(2) var<storage, read_write> u: array<f32>; // size = (width + 1) * height
+@group(0) @binding(3) var<storage, read_write> v: array<f32>; // size = width * (height + 1)
 @group(0) @binding(4) var<storage, read_write> u_new: array<f32>;
 @group(0) @binding(5) var<storage, read_write> v_new: array<f32>;
 
@@ -23,9 +23,14 @@ struct UintMetadata {
 @group(0) @binding(6) var<storage, read> pressure: array<f32>;
 @group(0) @binding(7) var<storage, read_write> new_pressure: array<f32>;
 @group(0) @binding(8) var<storage, read_write> divergence: array<f32>;
-@group(0) @binding(9) var<storage, read> obstacles: array<f32>;
-@group(0) @binding(10) var<storage, read> dye: array<f32>;
+@group(0) @binding(9) var<storage, read> obstacles: array<u32>;
+@group(0) @binding(10) var<storage, read_write> dye: array<f32>;
 @group(0) @binding(11) var<storage, read_write> dye_new: array<f32>;
+@group(0) @binding(12) var<storage, read> dye_sources: array<f32>;
+
+// velocity sources
+@group(0) @binding(13) var<storage, read> u_sources: array<f32>; // size = (width + 1) * height
+@group(0) @binding(14) var<storage, read> v_sources: array<f32>; // size = width * (height + 1)
 
 
 // helper functions
@@ -151,8 +156,57 @@ fn sample_divergence(x: f32, y: f32) -> f32 {
                     s *         t * c11;
 }
 
+fn is_fluid_cell(i: u32, j: u32) -> bool {
+    return obstacles[idx_center(i, j)] == 0u;
+}
+
 fn is_obstacle(i: u32, j: u32) -> bool {
-    return obstacles[idx_center(i, j)] > 0.5;
+    return obstacles[idx_center(i, j)] == 1u;
+}
+
+fn is_outflow(i: u32, j: u32) -> bool {
+    return obstacles[idx_center(i, j)] == 2u;
+}
+
+
+
+@compute @workgroup_size(16, 16)
+fn add_sources_main(
+    @builtin(global_invocation_id) global_id : vec3u,
+    @builtin(workgroup_id) workgroup_id : vec3u,
+    @builtin(local_invocation_id) local_id : vec3u,
+) {
+    let i = global_id.x;
+    let j = global_id.y;
+
+    if (i >= uint_metadata.width || j >= uint_metadata.height) {
+        return;
+    }
+
+    // add dye sources
+    let idx = idx_center(i, j);
+    if dye_sources[idx] > 0.0 {
+        dye[idx] = dye_sources[idx];
+    }
+
+    // add velocity sources
+    // u velocity
+    if (i < uint_metadata.width + 1u) {
+        let u_idx = idx_u(i, j);
+        let u_vel = u_sources[u_idx];
+        if (u_vel != 0.0) {
+            u[u_idx] = u_sources[u_idx];
+        }
+    }
+
+    // v velocity
+    if (j < uint_metadata.height + 1u) {
+        let v_idx = idx_v(i, j);
+        let v_vel = v_sources[v_idx];
+        if (v_vel != 0.0) {
+            v[v_idx] = v_sources[v_idx];
+        }
+    }
 }
 
 
@@ -172,7 +226,6 @@ fn advect_main(
     if (i >= uint_metadata.width || j >= uint_metadata.height) {
         return;
     }
-
 
     // advect u
     // first get velocity at the u location
@@ -226,6 +279,45 @@ fn advect_main(
 
 
 @compute @workgroup_size(16, 16)
+fn outflow_main(
+    @builtin(global_invocation_id) global_id : vec3u,
+    @builtin(workgroup_id) workgroup_id : vec3u,
+    @builtin(local_invocation_id) local_id : vec3u,
+) {
+    let i = global_id.x;
+    let j = global_id.y;
+
+    if (i >= uint_metadata.width || j >= uint_metadata.height) {
+        return;
+    }
+    if (!is_outflow(i, j)) {
+        return;
+    }
+
+    // outflow for u
+    if (i == 0u) {
+        // left edge
+        u[idx_u(i, j)] = u[idx_u(i + 1u, j)];
+    } else if (i == uint_metadata.width-1) {
+        // right edge
+        u[idx_u(i + 1u, j)] = u[idx_u(i, j)];
+    }
+
+    // outflow for v
+    if (j == 0u) {
+        // bottom edge
+        v[idx_v(i, j)] = v[idx_v(i, j + 1u)];
+    } else if (j == uint_metadata.height-1) {
+        // top edge
+        v[idx_v(i, j + 1u)] = v[idx_v(i, j)];
+    }
+
+    // outflow for dye
+    dye[idx_center(i, j)] = 0.0;
+}
+
+
+@compute @workgroup_size(16, 16)
 fn divergence_main(
     @builtin(global_invocation_id) global_id : vec3u,
     @builtin(workgroup_id) workgroup_id : vec3u,
@@ -240,7 +332,7 @@ fn divergence_main(
     }
 
     let idx = idx_center(i, j);
-    if (is_obstacle(i, j)) {
+    if (is_obstacle(i, j) || is_outflow(i, j)) {
         divergence[idx] = 0.0;
         return;
     }
@@ -250,16 +342,16 @@ fn divergence_main(
     var v_top = 0.0;
     var v_bottom = 0.0;
 
-    if (i + 1u < uint_metadata.width && !is_obstacle(i + 1u, j)) {
+    if (i < uint_metadata.width && (i == uint_metadata.width-1 || !is_obstacle(i + 1u, j))) {
         u_right = u[idx_u(i + 1u, j)];
     }
-    if (i > 0u && !is_obstacle(i - 1u, j)) {
+    if (i >= 0u && (i == 0u || !is_obstacle(i - 1u, j))) {
         u_left = u[idx_u(i, j)];
     }
-    if (j + 1u < uint_metadata.height && !is_obstacle(i, j + 1u)) {
+    if (j < uint_metadata.height && (j == uint_metadata.height-1 || !is_obstacle(i, j + 1u))) {
         v_top = v[idx_v(i, j + 1u)];
     }
-    if (j > 0u && !is_obstacle(i, j - 1u)) {
+    if (j >= 0u && (j == 0u || !is_obstacle(i, j - 1u))) {
         v_bottom = v[idx_v(i, j)];
     }
 
@@ -292,6 +384,19 @@ fn pressure_solve_main(
     let idx = idx_center(i, j);
     if (is_obstacle(i, j)) {
         new_pressure[idx] = 0.0;
+        return;
+    }
+
+    if (is_outflow(i, j)) {
+        if (i == 0u) {
+            new_pressure[idx] = pressure[idx_center(i + 1u, j)];
+        } else if (i == uint_metadata.width - 1u) {
+            new_pressure[idx] = pressure[idx_center(i - 1u, j)];
+        } else if (j == 0u) {
+            new_pressure[idx] = pressure[idx_center(i, j + 1u)];
+        } else if (j == uint_metadata.height - 1u) {
+            new_pressure[idx] = pressure[idx_center(i, j - 1u)];
+        }
         return;
     }
 
@@ -364,7 +469,7 @@ fn project_main(
         let solid_top = is_obstacle(i, j);
 
         let face_idx = idx_v(i, j);
-        
+
         if (solid_bottom || solid_top) {
             v_new[face_idx] = 0.0;
             return;
