@@ -109,6 +109,16 @@ fn sample_v(x: f32, y: f32) -> f32 {
                     s *         t * v11;
 }
 
+fn is_solid(i: u32, j: u32) -> bool {
+    let idx = idx_center(i, j);
+    return obstacles[idx] == 1u; // solid wall
+}
+
+fn is_fluid(i: u32, j: u32) -> bool {
+    let idx = idx_center(i, j);
+    return obstacles[idx] == 0u; // fluid cell
+}
+
 
 @compute @workgroup_size(16, 16)
 fn density_add_sources_main(
@@ -233,23 +243,51 @@ fn velocity_diffuse_main(
         return;
     }
 
+    let idx = idx_center(i, j);
+
+    if (is_solid(i, j)) {
+        u_new[idx] = 0.0;
+        v_new[idx] = 0.0;
+        return;
+    }
+
     let coeff = float_metadata.viscosity * float_metadata.delta_time * float_metadata.cell_size * float_metadata.cell_size;
 
-    // diffuse u
-    u_new[idx_center(i, j)] = (u[idx_center(i, j)] +
-        coeff * (u_new[idx_center(i + 1u, j)] +
-                 u_new[idx_center(i - 1u, j)] +
-                 u_new[idx_center(i, j + 1u)] +
-                 u_new[idx_center(i, j - 1u)])
-        ) / (1.0 + 4.0 * coeff);
+    var sum_u = 0.0;
+    var sum_v = 0.0;
+    var count = 0.0;
 
-    // diffuse v
-    v_new[idx_center(i, j)] = (v[idx_center(i, j)] +
-        coeff * (v_new[idx_center(i + 1u, j)] +
-                 v_new[idx_center(i - 1u, j)] +
-                 v_new[idx_center(i, j + 1u)] +
-                 v_new[idx_center(i, j - 1u)])
-        ) / (1.0 + 4.0 * coeff);
+    if (is_fluid(i + 1u, j)) {
+        sum_u += u_new[idx_center(i + 1u, j)];
+        sum_v += v_new[idx_center(i + 1u, j)];
+        count += 1.0;
+    }
+    if (is_fluid(i - 1u, j)) {
+        sum_u += u_new[idx_center(i - 1u, j)];
+        sum_v += v_new[idx_center(i - 1u, j)];
+        count += 1.0;
+    }
+    if (is_fluid(i, j + 1u)) {
+        sum_u += u_new[idx_center(i, j + 1u)];
+        sum_v += v_new[idx_center(i, j + 1u)];
+        count += 1.0;
+    }
+    if (is_fluid(i, j - 1u)) {
+        sum_u += u_new[idx_center(i, j - 1u)];
+        sum_v += v_new[idx_center(i, j - 1u)];
+        count += 1.0;
+    }
+
+    if (count == 0.0) {
+        u_new[idx] = u[idx];
+        v_new[idx] = v[idx];
+        return;
+    }
+
+    let denom = 1.0 + coeff * count;
+
+    u_new[idx] = (u[idx] + coeff * sum_u) / denom;
+    v_new[idx] = (v[idx] + coeff * sum_v) / denom;
 }
 
 @compute @workgroup_size(16, 16)
@@ -267,10 +305,31 @@ fn velocity_divergence_main(
     }
 
     let idx = idx_center(i, j);
+    if (is_solid(i, j)) {
+        divergence[idx] = 0.0;
+        pressure[idx] = 0.0; // is this needed here
+        return;
+    }
 
-    let div = -0.5 * float_metadata.cell_size * (u[idx_center(i + 1u, j)] - u[idx_center(i - 1u, j)] +
-               v[idx_center(i, j + 1u)] - v[idx_center(i, j - 1u)]);
+    var uL = 0.0;
+    var uR = 0.0;
+    var vB = 0.0;
+    var vT = 0.0;
 
+    if (is_fluid(i - 1u, j)) {
+        uL = u[idx_center(i - 1u, j)];
+    }
+    if (is_fluid(i + 1u, j)) {
+        uR = u[idx_center(i + 1u, j)];
+    }
+    if (is_fluid(i, j - 1u)) {
+        vB = v[idx_center(i, j - 1u)];
+    }
+    if (is_fluid(i, j + 1u)) {
+        vT = v[idx_center(i, j + 1u)];
+    }
+
+    let div = -0.5 * float_metadata.cell_size * (uR - uL + vT - vB);
     divergence[idx] = div;
     pressure[idx] = 0.0;
 }
@@ -291,13 +350,37 @@ fn velocity_pressure_solve_main(
     }
 
     let idx = idx_center(i, j);
-    pressure[idx] = (divergence[idx] +
-        pressure[idx_center(i + 1u, j)] +
-        pressure[idx_center(i - 1u, j)] +
-        pressure[idx_center(i, j + 1u)] +
-        pressure[idx_center(i, j - 1u)])
-        / 4.0;
+    if (is_solid(i, j)) {
+        pressure[idx] = 0.0;
+        return;
+    }
 
+    var sum_neighbors = 0.0;
+    var count_neighbors = 0.0;
+
+    if (is_fluid(i + 1u, j)) {
+        sum_neighbors += pressure[idx_center(i + 1u, j)];
+        count_neighbors += 1.0;
+    }
+    if (is_fluid(i - 1u, j)) {
+        sum_neighbors += pressure[idx_center(i - 1u, j)];
+        count_neighbors += 1.0;
+    }
+    if (is_fluid(i, j + 1u)) {
+        sum_neighbors += pressure[idx_center(i, j + 1u)];
+        count_neighbors += 1.0;
+    }
+    if (is_fluid(i, j - 1u)) {
+        sum_neighbors += pressure[idx_center(i, j - 1u)];
+        count_neighbors += 1.0;
+    }
+
+    if (count_neighbors == 0.0) {
+        pressure[idx] = 0.0;
+        return;
+    } else {
+        pressure[idx] = (divergence[idx] + sum_neighbors) / count_neighbors;
+    }
 }
 
 
@@ -316,8 +399,32 @@ fn velocity_project_main(
     }
 
     let idx = idx_center(i, j);
-    u[idx] -= 0.5 * (pressure[idx_center(i + 1u, j)] - pressure[idx_center(i - 1u, j)]) / float_metadata.cell_size;
-    v[idx] -= 0.5 * (pressure[idx_center(i, j + 1u)] - pressure[idx_center(i, j - 1u)]) / float_metadata.cell_size;
+    if (is_solid(i, j)) {
+        u[idx] = 0.0;
+        v[idx] = 0.0;
+        return;
+    }
+
+    var pL = pressure[idx];
+    var pR = pressure[idx];
+    var pB = pressure[idx];
+    var pT = pressure[idx];
+
+    if (is_fluid(i - 1u, j)) {
+        pL = pressure[idx_center(i - 1u, j)];
+    }
+    if (is_fluid(i + 1u, j)) {
+        pR = pressure[idx_center(i + 1u, j)];
+    }
+    if (is_fluid(i, j - 1u)) {
+        pB = pressure[idx_center(i, j - 1u)];
+    }
+    if (is_fluid(i, j + 1u)) {
+        pT = pressure[idx_center(i, j + 1u)];
+    }
+
+    u[idx] -= 0.5 * (pR - pL) / float_metadata.cell_size;
+    v[idx] -= 0.5 * (pT - pB) / float_metadata.cell_size;
 }
 
 

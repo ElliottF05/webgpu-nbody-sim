@@ -5,6 +5,7 @@ struct UintMetadata {
 
 @group(0) @binding(0) var<uniform> uint_metadata : UintMetadata;
 @group(0) @binding(1) var<storage, read> density : array<f32>;
+@group(0) @binding(2) var<storage, read> obstacles : array<u32>;
 
 struct VSOut {
     @builtin(position) pos : vec4<f32>,
@@ -34,6 +35,10 @@ fn fragment_main(in : VSOut) -> @location(0) vec4<f32> {
 
     let idx = u32(py) * uint_metadata.width + u32(px);
 
+    if (obstacles[idx] != 0u) {
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+    
     let c = density[idx];
     return vec4<f32>(c, c, c, 1.0);
 }

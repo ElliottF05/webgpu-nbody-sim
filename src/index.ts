@@ -26,6 +26,8 @@ const height = canvas.height;
 // 1) Metadata buffers
 const uintMetadata = new Uint32Array([width, height]); // width, height
 const floatMetadata = new Float32Array([0.016, 1.0, 0.0, 0.0]); // delta_time, cell_size, diffusion_rate, viscosity
+const stepsPerFrame = 10;
+const numJacobiIterations = 2;
 
 const uintMetadataBuffer = device.createBuffer({
   size: uintMetadata.byteLength,
@@ -102,7 +104,8 @@ const vConstants = new Float32Array(width * height).fill(0.0);
 for (let y = 0; y < height; ++y) {
   const x = 1;
   const idx = y * width + x;
-  uConstants[idx] = 50.0;
+  const speed = 10.0 + (Math.random() - 0.5) * 1.0;
+  uConstants[idx] = speed;
 }
 
 const uSourcesBuffer = createBuffer(uSources);
@@ -112,6 +115,14 @@ const uConstantsBuffer = createBuffer(uConstants);
 const vConstantsBuffer = createBuffer(vConstants);
 
 const obstacles = new Uint32Array(width * height).fill(0);
+// add a box obstacle
+for (let y = 180; y < 220; ++y) {
+  for (let x = 100; x < 105; ++x) {
+    const idx = y * width + x;
+    obstacles[idx] = 1;
+  }
+}
+
 const obstaclesBuffer = createBuffer(obstacles);
 
 
@@ -178,7 +189,7 @@ const densityAddSourcesBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -210,7 +221,7 @@ const densityDiffuseBindGroupA = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -233,7 +244,7 @@ const densityDiffuseBindGroupB = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -265,7 +276,7 @@ const densityAdvectBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -297,7 +308,7 @@ const velocityAddSourcesBindGroup = device.createBindGroup({
     { binding: 13, resource: { buffer: vSourcesBuffer } },
     { binding: 14, resource: { buffer: uConstantsBuffer } },
     { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -329,7 +340,7 @@ const velocityDiffuseBindGroupA = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -352,7 +363,7 @@ const velocityDiffuseBindGroupB = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -384,7 +395,7 @@ const velocityDivergenceBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -416,7 +427,7 @@ const velocityPressureSolveBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -448,7 +459,7 @@ const velocityProjectBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -480,7 +491,7 @@ const velocityAdvectBindGroup = device.createBindGroup({
     // { binding: 13, resource: { buffer: vSourcesBuffer } },
     // { binding: 14, resource: { buffer: uConstantsBuffer } },
     // { binding: 15, resource: { buffer: vConstantsBuffer } },
-    // { binding: 16, resource: { buffer: boundaryTypesBuffer } },
+    // { binding: 16, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
@@ -634,14 +645,13 @@ const renderBindGroup = device.createBindGroup({
   entries: [
     { binding: 0, resource: { buffer: uintMetadataBuffer } },
     { binding: 1, resource: { buffer: densityBuffer } },
+    { binding: 2, resource: { buffer: obstaclesBuffer } },
   ],
 });
 
 
 
 // ----- Main simulation loop -----
-const numJacobiIterations = 20;
-
 const workgroupX = 16;
 const workgroupY = 16;
 
@@ -651,21 +661,47 @@ const dispatchY = Math.ceil(height / workgroupY);
 function frame() {
   const commandEncoder = device.createCommandEncoder();
 
-  // Compute pass
-  {
-    const computePass = commandEncoder.beginComputePass();
+  for (let step = 0; step < stepsPerFrame; step++) {
 
-    // 1) Velocity step
+    // Compute pass
+    {
+      const computePass = commandEncoder.beginComputePass();
 
-    // 1.1) Add velocity sources
-    computePass.setPipeline(velocityAddSourcesPipeline);
-    computePass.setBindGroup(0, velocityAddSourcesBindGroup); // u,v (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      // 1) Velocity step
 
-    // 1.2) Diffuse velocity
-    for (let i = 0; i < numJacobiIterations / 2; i++) {
-      computePass.setPipeline(velocityDiffusePipeline);
-      computePass.setBindGroup(0, velocityDiffuseBindGroupA); // u,v -> u_new,v_new
+      // 1.1) Add velocity sources
+      computePass.setPipeline(velocityAddSourcesPipeline);
+      computePass.setBindGroup(0, velocityAddSourcesBindGroup); // u,v (in place)
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      // 1.2) Diffuse velocity
+      for (let i = 0; i < numJacobiIterations / 2; i++) {
+        computePass.setPipeline(velocityDiffusePipeline);
+        computePass.setBindGroup(0, velocityDiffuseBindGroupA); // u,v -> u_new,v_new
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(velocityDiffusePipeline);
+        computePass.setBindGroup(0, velocityDiffuseBindGroupB); // u_new,v_new -> u,v
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      }
+
+      // 1.3) Project velocity
+      computePass.setPipeline(velocityDivergencePipeline);
+      computePass.setBindGroup(0, velocityDivergenceBindGroup); // velocity, divergence (in place)
       computePass.dispatchWorkgroups(dispatchX, dispatchY);
 
       computePass.setPipeline(setBoundaryScalarPipeline);
@@ -675,8 +711,21 @@ function frame() {
       computePass.setBindGroup(0, setBoundaryVectorBindGroup);
       computePass.dispatchWorkgroups(dispatchX, dispatchY);
 
-      computePass.setPipeline(velocityDiffusePipeline);
-      computePass.setBindGroup(0, velocityDiffuseBindGroupB); // u_new,v_new -> u,v
+      for (let i = 0; i < numJacobiIterations; i++) {
+        computePass.setPipeline(velocityPressureSolvePipeline);
+        computePass.setBindGroup(0, velocityPressureSolveBindGroup); // pressure (in place)
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      }
+
+      computePass.setPipeline(velocityProjectPipeline);
+      computePass.setBindGroup(0, velocityProjectBindGroup); // u,v (in place)
       computePass.dispatchWorkgroups(dispatchX, dispatchY);
 
       computePass.setPipeline(setBoundaryScalarPipeline);
@@ -685,148 +734,112 @@ function frame() {
       computePass.setPipeline(setBoundaryVectorPipeline);
       computePass.setBindGroup(0, setBoundaryVectorBindGroup);
       computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+
+      // 1.4) Advect velocity
+      computePass.setPipeline(velocityAdvectPipeline);
+      computePass.setBindGroup(0, velocityAdvectBindGroup); // u,v -> u_new,v_new
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(setBoundaryScalarPipeline);
+      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      computePass.setPipeline(setBoundaryVectorPipeline);
+      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(swapVelocityPipeline);
+      computePass.setBindGroup(0, swapVelocityBindGroup); // u_new,v_new -> u,v
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      // 1.5) Project velocity again
+      computePass.setPipeline(velocityDivergencePipeline);
+      computePass.setBindGroup(0, velocityDivergenceBindGroup); // velocity, divergence (in place)
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(setBoundaryScalarPipeline);
+      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      computePass.setPipeline(setBoundaryVectorPipeline);
+      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      for (let i = 0; i < numJacobiIterations; i++) {
+        computePass.setPipeline(velocityPressureSolvePipeline);
+        computePass.setBindGroup(0, velocityPressureSolveBindGroup); // pressure (in place)
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      }
+
+      computePass.setPipeline(velocityProjectPipeline);
+      computePass.setBindGroup(0, velocityProjectBindGroup); // u,v (in place)
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(setBoundaryScalarPipeline);
+      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      computePass.setPipeline(setBoundaryVectorPipeline);
+      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+
+      // 2) Density step
+
+      // 2.1) Add density sources
+      computePass.setPipeline(densityAddSourcesPipeline);
+      computePass.setBindGroup(0, densityAddSourcesBindGroup); // density (in place)
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      // 2.2) Diffuse density
+      for (let i = 0; i < numJacobiIterations / 2; i++) {
+        computePass.setPipeline(densityDiffusePipeline);
+        computePass.setBindGroup(0, densityDiffuseBindGroupA);  // density -> density_new
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(densityDiffusePipeline);
+        computePass.setBindGroup(0, densityDiffuseBindGroupB); // density_new -> density
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+        computePass.setPipeline(setBoundaryScalarPipeline);
+        computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+        computePass.setPipeline(setBoundaryVectorPipeline);
+        computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+        computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      }
+
+      // 2.3) Advect density
+      computePass.setPipeline(densityAdvectPipeline);
+      computePass.setBindGroup(0, densityAdvectBindGroup); // density -> density_new
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(setBoundaryScalarPipeline);
+      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+      computePass.setPipeline(setBoundaryVectorPipeline);
+      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+      computePass.setPipeline(swapDensityPipeline);;
+      computePass.setBindGroup(0, swapDensityBindGroup); // density_new -> density
+      computePass.dispatchWorkgroups(dispatchX, dispatchY);
+
+
+      computePass.end();
     }
-
-    // 1.3) Project velocity
-    computePass.setPipeline(velocityDivergencePipeline);
-    computePass.setBindGroup(0, velocityDivergenceBindGroup); // velocity, divergence (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    for (let i = 0; i < numJacobiIterations; i++) {
-      computePass.setPipeline(velocityPressureSolvePipeline);
-      computePass.setBindGroup(0, velocityPressureSolveBindGroup); // pressure (in place)
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-      computePass.setPipeline(setBoundaryScalarPipeline);
-      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-      computePass.setPipeline(setBoundaryVectorPipeline);
-      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    }
-
-    computePass.setPipeline(velocityProjectPipeline);
-    computePass.setBindGroup(0, velocityProjectBindGroup); // u,v (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-
-    // 1.4) Advect velocity
-    computePass.setPipeline(velocityAdvectPipeline);
-    computePass.setBindGroup(0, velocityAdvectBindGroup); // u,v -> u_new,v_new
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(swapVelocityPipeline);
-    computePass.setBindGroup(0, swapVelocityBindGroup); // u_new,v_new -> u,v
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    // 1.5) Project velocity again
-    computePass.setPipeline(velocityDivergencePipeline);
-    computePass.setBindGroup(0, velocityDivergenceBindGroup); // velocity, divergence (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    for (let i = 0; i < numJacobiIterations; i++) {
-      computePass.setPipeline(velocityPressureSolvePipeline);
-      computePass.setBindGroup(0, velocityPressureSolveBindGroup); // pressure (in place)
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-      computePass.setPipeline(setBoundaryScalarPipeline);
-      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-      computePass.setPipeline(setBoundaryVectorPipeline);
-      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    }
-
-    computePass.setPipeline(velocityProjectPipeline);
-    computePass.setBindGroup(0, velocityProjectBindGroup); // u,v (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-
-    // 2) Density step
-
-    // 2.1) Add density sources
-    computePass.setPipeline(densityAddSourcesPipeline);
-    computePass.setBindGroup(0, densityAddSourcesBindGroup); // density (in place)
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    // 2.2) Diffuse density
-    for (let i = 0; i < numJacobiIterations / 2; i++) {
-      computePass.setPipeline(densityDiffusePipeline);
-      computePass.setBindGroup(0, densityDiffuseBindGroupA);  // density -> density_new
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-      computePass.setPipeline(setBoundaryScalarPipeline);
-      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-      computePass.setPipeline(setBoundaryVectorPipeline);
-      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-      computePass.setPipeline(densityDiffusePipeline);
-      computePass.setBindGroup(0, densityDiffuseBindGroupB); // density_new -> density
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-      computePass.setPipeline(setBoundaryScalarPipeline);
-      computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-      computePass.setPipeline(setBoundaryVectorPipeline);
-      computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-      computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    }
-
-    // 2.3) Advect density
-    computePass.setPipeline(densityAdvectPipeline);
-    computePass.setBindGroup(0, densityAdvectBindGroup); // density -> density_new
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(setBoundaryScalarPipeline);
-    computePass.setBindGroup(0, setBoundaryScalarBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-    computePass.setPipeline(setBoundaryVectorPipeline);
-    computePass.setBindGroup(0, setBoundaryVectorBindGroup);
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-    computePass.setPipeline(swapDensityPipeline);;
-    computePass.setBindGroup(0, swapDensityBindGroup); // density_new -> density
-    computePass.dispatchWorkgroups(dispatchX, dispatchY);
-
-
-    computePass.end();
   }
 
   // Render pass
