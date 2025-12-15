@@ -16,13 +16,16 @@ context.configure({ device, format: canvasFormat, alphaMode: "premultiplied" });
 const width = canvas.width;
 const height = canvas.height;
 
-// Simulation data
+// Simulation parameters
 const numBodies = 10;
 const gravConstant = 1.0;
-const deltaTime = 1.0/60.0;
+const substeps = 10;
 const camCenter = [0.0, 0.0];
 const camHalfSize = [10.0, 10.0];
 const viewPort = [width, height]
+
+// Derived values
+const deltaTime = 1.0 / (60.0 * substeps)
 
 
 // ----- Initialize GPU buffers -----
@@ -179,14 +182,15 @@ function frame() {
 
   // Compute pass
   const computePass = commandEncoder.beginComputePass();
+  for (let i = 0; i < substeps; i++) {
+    computePass.setPipeline(gravityStepPipeline);
+    computePass.setBindGroup(0, gravityStepBindGroup);
+    computePass.dispatchWorkgroups(dispatchX);
 
-  computePass.setPipeline(gravityStepPipeline);
-  computePass.setBindGroup(0, gravityStepBindGroup);
-  computePass.dispatchWorkgroups(dispatchX);
-
-  computePass.setPipeline(swapPipeline);
-  computePass.setBindGroup(0, swapBindGroup);
-  computePass.dispatchWorkgroups(dispatchX);
+    computePass.setPipeline(swapPipeline);
+    computePass.setBindGroup(0, swapBindGroup);
+    computePass.dispatchWorkgroups(dispatchX);
+  }
   
   computePass.end();
 
