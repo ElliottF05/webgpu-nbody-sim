@@ -178,6 +178,53 @@ const renderBindGroup = device.createBindGroup({
 });
 
 
+// ----- Interactivity -----
+function canvasPixelToWorldPos(clientX: number, clientY: number) {
+  const rect = canvas.getBoundingClientRect();
+
+  // pixel coords relative to canvas
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+
+  // normalized to [-1,1]
+  const u = (2 * px / rect.width) - 1;
+  const v = (2 * py / rect.height) - 1;
+
+  // to world pos
+  const worldX = u * camHalfSize[0] + camCenter[0];
+  const worldY = v * camHalfSize[1] + camCenter[1];
+
+  return [worldX, worldY];
+}
+
+// Scrolling for zooming
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+
+  // position before zoom
+  const [x1, y1] = canvasPixelToWorldPos(e.clientX, e.clientY);
+
+  const zoomSpeed = 0.0015;
+  const zoomFactor = Math.exp(e.deltaY * zoomSpeed);
+
+  // clamp
+  const minHalfSize = 0.01;
+  const maxHalfSize = 1e4;
+  camHalfSize[0] = Math.min(maxHalfSize, Math.max(minHalfSize, camHalfSize[0] * zoomFactor));
+
+  // keep aspect ratio
+  const aspect = viewPort[0] / viewPort[1];
+  camHalfSize[1] = camHalfSize[0] / aspect;
+
+  // get position after zoom
+  const [x2, y2] = canvasPixelToWorldPos(e.clientX, e.clientY);
+
+  // shift camera
+  camCenter[0] += x1 - x2;
+  camCenter[1] += y2 - y1;
+}, {passive: false})
+
+
 // ----- Main simulation loop -----
 const workgroupX = 16;
 const dispatchX = Math.ceil(numBodies / workgroupX);
