@@ -1,7 +1,6 @@
 import computeShaderCode from "./shaders/compute.wgsl?raw";
 import renderShaderCode from "./shaders/render.wgsl?raw";
 
-
 // Initialize WebGPU
 const adapter = (await navigator.gpu.requestAdapter())!;
 const device = await adapter.requestDevice();
@@ -22,14 +21,17 @@ const gravConstant = 1.0;
 const maxMass = 1.0;
 const minStepsPerOrbit = 50;
 const substeps = 10;
-const camCenter = [0.0, 0.0];
-const camHalfSize = [10.0, 10.0];
+const initCamCenter = [0.0, 0.0];
+const initCamHalfSize = [10.0, 10.0];
 const viewPort = [width, height]
 
 // Derived values
 const deltaTime = 0.1 * 1.0 / (60.0 * substeps)
 const epsilon = 1.0 * Math.pow(gravConstant * 2 * maxMass * (minStepsPerOrbit * deltaTime / (2 * Math.PI)) * (minStepsPerOrbit * deltaTime / (2 * Math.PI)), 1.0 / 3.0);
 
+// Dynamic values
+let camCenter = initCamCenter;
+let camHalfSize = initCamHalfSize;
 
 // ----- Initialize GPU buffers -----
 
@@ -57,6 +59,20 @@ const floatMetadata = new Float32Array([gravConstant, deltaTime, epsilon, 0.0, .
 const uintMetadataBuffer = createMetadataBuffer(uintMetadata);
 const floatMetadataBuffer = createMetadataBuffer(floatMetadata);
 
+function syncFloatMetadata() {
+  floatMetadata[4] = camCenter[0];
+  floatMetadata[5] = camCenter[1];
+  floatMetadata[6] = camHalfSize[0];
+  floatMetadata[7] = camHalfSize[1];
+
+  device.queue.writeBuffer(
+    floatMetadataBuffer,
+    0,
+    floatMetadata.buffer,
+    floatMetadata.byteOffset,
+    floatMetadata.byteLength
+  )
+}
 
 // Mass buffer
 const mass = new Float32Array(numBodies).fill(1.0);
@@ -206,6 +222,9 @@ function frame() {
   renderPass.end();
 
   device.queue.submit([commandEncoder.finish()]);
+
+  // sync metadata at the end of each frame to get updated camera info
+  syncFloatMetadata();
 
   requestAnimationFrame(frame);
 }
