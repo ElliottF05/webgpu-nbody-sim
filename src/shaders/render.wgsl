@@ -62,5 +62,6 @@ fn vertex_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u3
 
 @fragment
 fn fragment_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    // return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    return vec4<f32>(0.3, 0.3, 0.3, 1.0);
 }

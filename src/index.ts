@@ -161,7 +161,22 @@ const renderPipeline = device.createRenderPipeline({
   fragment: {
     module: renderShaderModule,
     entryPoint: "fragment_main",
-    targets: [{ format: canvasFormat }],
+    targets: [{ 
+      format: canvasFormat,
+      blend: {
+        color: {
+          srcFactor: "one",
+          dstFactor: "one",
+          operation: "add"
+        },
+        alpha: {
+          srcFactor: "one",
+          dstFactor: "one-minus-src-alpha",
+          operation: "add",
+        },
+      },
+      writeMask: GPUColorWrite.ALL,
+    }],
   },
   primitive: {
     topology: "triangle-list",
@@ -269,7 +284,6 @@ function endPan(e: PointerEvent) {
 
 canvas.addEventListener("pointerup", endPan);
 canvas.addEventListener("pointercancel", endPan);
-canvas.addEventListener("pointerleave", (_e) => { isPanning = false })
 
 
 // ----- Main simulation loop -----
