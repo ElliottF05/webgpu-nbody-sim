@@ -1,6 +1,8 @@
 struct FloatMetadata {
     grav_constant: f32,
     delta_time: f32,
+    epsilon: f32,
+    _pad: f32,
     cam_center: vec2<f32>,
     cam_half_size: vec2<f32>,
     viewport: vec2<f32>,

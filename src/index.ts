@@ -17,15 +17,18 @@ const width = canvas.width;
 const height = canvas.height;
 
 // Simulation parameters
-const numBodies = 10;
+const numBodies = 2000;
 const gravConstant = 1.0;
+const maxMass = 1.0;
+const minStepsPerOrbit = 50;
 const substeps = 10;
 const camCenter = [0.0, 0.0];
 const camHalfSize = [10.0, 10.0];
 const viewPort = [width, height]
 
 // Derived values
-const deltaTime = 1.0 / (60.0 * substeps)
+const deltaTime = 0.1 * 1.0 / (60.0 * substeps)
+const epsilon = 1.0 * Math.pow(gravConstant * 2 * maxMass * (minStepsPerOrbit * deltaTime / (2 * Math.PI)) * (minStepsPerOrbit * deltaTime / (2 * Math.PI)), 1.0 / 3.0);
 
 
 // ----- Initialize GPU buffers -----
@@ -49,7 +52,7 @@ function createMetadataBuffer(initialData: Uint32Array | Float32Array): GPUBuffe
 
 // Metadata buffers
 const uintMetadata = new Uint32Array([numBodies]); // num_bodies
-const floatMetadata = new Float32Array([gravConstant, deltaTime, ...camCenter, ...camHalfSize, ...viewPort]); // delta_time, cell_size, diffusion_rate, viscosity, vorticity
+const floatMetadata = new Float32Array([gravConstant, deltaTime, epsilon, 0.0, ...camCenter, ...camHalfSize, ...viewPort]);
 
 const uintMetadataBuffer = createMetadataBuffer(uintMetadata);
 const floatMetadataBuffer = createMetadataBuffer(floatMetadata);
@@ -63,8 +66,8 @@ const massBuffer = createBuffer(mass);
 // Pos buffers
 const initPos = new Float32Array(2 * numBodies).fill(0.0);
 for (let i = 0; i < numBodies; i++) {
-  const x = (Math.random() - 0.5) * 10;
-  const y = (Math.random() - 0.5) * 10;
+  const x = (Math.random() - 0.5) * 15;
+  const y = (Math.random() - 0.5) * 15;
   initPos[2*i] = x;
   initPos[2*i + 1] = y;
 }
@@ -74,8 +77,8 @@ const posBuffer = createBuffer(initPos);
 // Velocity buffers
 const initVel = new Float32Array(2 * numBodies).fill(0.0);
 for (let i = 0; i < numBodies; i++) {
-  const x = (Math.random() - 1) * 1;
-  const y = (Math.random() - 1) * 1;
+  const x = (Math.random() - 0.5) * 1;
+  const y = (Math.random() - 0.5) * 1;
   initVel[2*i] = x;
   initVel[2*i + 1] = y;
 }

@@ -1,6 +1,8 @@
 struct FloatMetadata {
     grav_constant: f32,
     delta_time: f32,
+    epsilon: f32,
+    _pad: f32,
     cam_center: vec2<f32>,
     cam_half_size: vec2<f32>,
     viewport: vec2<f32>,
@@ -30,8 +32,7 @@ fn half_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     let pos1 = pos_buf[i];
-    let m1 = mass_buf[i];
-    var f_net = vec2<f32>(0.0, 0.0);
+    var accel = vec2<f32>(0.0, 0.0);
 
     // accumulate force from all other bodies
     for (var j: u32 = 0; j < uint_metadata.num_bodies; j++) {
@@ -42,14 +43,16 @@ fn half_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let m2 = mass_buf[j];
 
         let r = pos2 - pos1;
-        let dist = length(r);
+        let dist_squared = dot(r, r);
+        let eps = float_metadata.epsilon;
 
-        let f_grav = float_metadata.grav_constant * m1 * m2 * r / (dist * dist * dist);
-        f_net += f_grav;
+        let inv_denom = inverseSqrt(dist_squared + eps*eps);
+        let inv_denom_3 = inv_denom * inv_denom * inv_denom;
+        
+        accel += float_metadata.grav_constant * m2 * r * inv_denom_3;
     }
 
     // update velocity by a half step
-    let accel = f_net / m1;
     let dt = float_metadata.delta_time;
     vel_buf[i] = vel_buf[i] + 0.5 * accel * dt;
 }
