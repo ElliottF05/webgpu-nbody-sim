@@ -225,6 +225,53 @@ canvas.addEventListener("wheel", (e) => {
 }, {passive: false})
 
 
+// Click and drag for panning
+let isPanning = false;
+let lastClientPos = [0,0];
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) {
+    return; // must be left moust button
+  }
+  isPanning = true;
+  lastClientPos = [e.clientX, e.clientY];
+  canvas.setPointerCapture(e.pointerId);
+})
+
+canvas.addEventListener("pointermove", (e) => {
+  if (!isPanning) {
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const dxPixels = e.clientX - lastClientPos[0];
+  const dyPixels = e.clientY - lastClientPos[1];
+  lastClientPos = [e.clientX, e.clientY];
+
+  const worldPerPixelX = (2 * camHalfSize[0]) / rect.width;
+  const worldPerPixelY = (2 * camHalfSize[1]) / rect.height;
+
+  camCenter[0] -= dxPixels * worldPerPixelX;
+  camCenter[1] += dyPixels * worldPerPixelY
+})
+
+function endPan(e: PointerEvent) {
+  if (!isPanning) {
+    return;
+  }
+  isPanning = false;
+  try {
+    canvas.releasePointerCapture(e.pointerId);
+  } catch {
+    // do nothing
+  }
+}
+
+canvas.addEventListener("pointerup", endPan);
+canvas.addEventListener("pointercancel", endPan);
+canvas.addEventListener("pointerleave", (_e) => { isPanning = false })
+
+
 // ----- Main simulation loop -----
 const workgroupX = 16;
 const dispatchX = Math.ceil(numBodies / workgroupX);
