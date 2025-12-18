@@ -24,7 +24,7 @@ struct UintMetadata {
 
 // USING VELOCITY VERLET INTEGRATION
 
-@compute @workgroup_size(16)
+@compute @workgroup_size(64)
 fn half_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let i = global_id.x;
     if i >= uint_metadata.num_bodies {
@@ -57,7 +57,7 @@ fn half_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     vel_buf[i] = vel_buf[i] + 0.5 * accel * dt;
 }
 
-@compute @workgroup_size(16)
+@compute @workgroup_size(64)
 fn pos_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let i = global_id.x;
     if i >= uint_metadata.num_bodies {

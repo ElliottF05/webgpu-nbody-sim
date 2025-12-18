@@ -1,0 +1,150 @@
+import { buildMetadataArrays } from "./buffers";
+import type { Simulation } from "./simulation";
+
+
+export class InteractionController {
+    private readonly device: GPUDevice;
+    private readonly canvas: HTMLCanvasElement;
+    private readonly sim: Simulation;
+    private isDragging: boolean = false;
+    private lastMousePos: [number, number] = [0, 0];
+    
+    public constructor(device: GPUDevice, canvas: HTMLCanvasElement, sim: Simulation) {
+        this.device = device;
+        this.canvas = canvas;
+        this.sim = sim;
+
+        // set up event listeners
+        this.addScrollListener();
+        this.addDragListener();
+    }
+
+    private getMouseWorldPos(clientX: number, clientY: number): [number, number] {
+        const rect = this.canvas.getBoundingClientRect();
+
+        const [camCenterX, camCenterY] = this.sim.getCamCenter();
+        const [camHalfSizeX, camHalfSizeY] = this.sim.getCamHalfSize();
+
+        // pixel coords relative to canvas
+        const px = clientX - rect.left;
+        const py = clientY - rect.top;
+
+        // normalized to [-1,1]
+        const u = (2 * px / rect.width) - 1;
+        const v = (2 * py / rect.height) - 1;
+
+        // to world pos
+        const worldX = u * camHalfSizeX + camCenterX;
+        const worldY = v * camHalfSizeY + camCenterY;
+
+        return [worldX, worldY];
+    }
+
+    private clamp(value: number, min: number, max: number): number {
+        return Math.min(max, Math.max(min, value));
+    }
+
+    private addScrollListener() {
+        // Scrolling for zooming
+        this.canvas.addEventListener("wheel", (e) => {
+        e.preventDefault();
+
+        // position before zoom
+        const [x1, y1] = this.getMouseWorldPos(e.clientX, e.clientY);
+        const zoomSpeed = 0.0015;
+        const zoomFactor = Math.exp(e.deltaY * zoomSpeed);
+
+        // clamp
+        const minHalfSize = 0.01;
+        const maxHalfSize = 1e4;
+
+        const camCenter = this.sim.getCamCenter();
+        const camHalfSize = this.sim.getCamHalfSize();
+        const viewPort = this.sim.getViewPort();
+
+        camHalfSize[0] = this.clamp(camHalfSize[0] * zoomFactor, minHalfSize, maxHalfSize);
+
+        // keep aspect ratio
+        const aspect = viewPort[0] / viewPort[1];
+        camHalfSize[1] = camHalfSize[0] / aspect;
+
+        // get position after zoom
+        const [x2, y2] = this.getMouseWorldPos(e.clientX, e.clientY);
+
+        // shift camera
+        camCenter[0] += x1 - x2;
+        camCenter[1] += y2 - y1;
+        }, {passive: false})
+    }
+
+    private addDragListener() {
+        this.canvas.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0) {
+                return; // must be left moust button
+            }
+            this.isDragging = true;
+            this.lastMousePos = [e.clientX, e.clientY];
+            this.canvas.setPointerCapture(e.pointerId);
+        });
+
+        this.canvas.addEventListener("pointermove", (e) => {
+            if (!this.isDragging) {
+                return;
+            }
+
+            const rect = this.canvas.getBoundingClientRect();
+            const dxPixels = e.clientX - this.lastMousePos[0];
+            const dyPixels = e.clientY - this.lastMousePos[1];
+            this.lastMousePos = [e.clientX, e.clientY];
+
+            const camCenter = this.sim.getCamCenter();
+            const camHalfSize = this.sim.getCamHalfSize();
+
+            const worldPerPixelX = (2 * camHalfSize[0]) / rect.width;
+            const worldPerPixelY = (2 * camHalfSize[1]) / rect.height;
+
+            camCenter[0] -= dxPixels * worldPerPixelX;
+            camCenter[1] += dyPixels * worldPerPixelY
+        });
+
+        const endPan = (e: PointerEvent) => {
+            if (!this.isDragging) {
+                return;
+            }
+            this.isDragging = false;
+            try {
+                this.canvas.releasePointerCapture(e.pointerId);
+            } catch {
+                // do nothing
+            }
+        }
+
+        this.canvas.addEventListener("pointerup", endPan);
+        this.canvas.addEventListener("pointercancel", endPan);
+    }
+
+    public sendUpdateToGPU(): void {
+        // sync metadata buffers
+        const { uintMetadataArray, floatMetadataArray } = buildMetadataArrays(
+            this.sim.getConfig(),
+            this.sim.getCamCenter(),
+            this.sim.getCamHalfSize()
+        );
+
+        this.device.queue.writeBuffer(
+            this.sim.getBuffers().uintMetadata,
+            0,
+            uintMetadataArray.buffer,
+            uintMetadataArray.byteOffset,
+            uintMetadataArray.byteLength
+        );
+
+        this.device.queue.writeBuffer(
+            this.sim.getBuffers().floatMetadata,
+            0,
+            floatMetadataArray.buffer,
+            floatMetadataArray.byteOffset,
+            floatMetadataArray.byteLength
+        );
+    }
+}

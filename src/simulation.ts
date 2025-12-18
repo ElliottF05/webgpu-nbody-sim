@@ -1,0 +1,86 @@
+import type { GPUCommandSource } from "./main";
+import { createSimBindGroups, type SimBindGroups } from "./bindGroups";
+import { createSimBuffers, type SimBuffers } from "./buffers";
+import { getDefaultSimConfig, type SimConfig } from "./config";
+import { createSimPipelines, type SimPipelines } from "./pipelines";
+
+
+export class Simulation implements GPUCommandSource {
+    // gpu device
+    private readonly device: GPUDevice;
+
+    // immutable config
+    private readonly config: SimConfig;
+
+    // dynamic state
+    private camCenter: [number, number];
+    private camHalfSize: [number, number];
+
+    // GPU buffers, pipelines, and bind groups
+    private buffers: SimBuffers;
+    private pipelines: SimPipelines;
+    private bindGroups: SimBindGroups;
+
+
+    public constructor(device: GPUDevice, canvas: HTMLCanvasElement) {
+        // set up device
+        this.device = device;
+
+        // set up default config
+        this.config = getDefaultSimConfig(canvas);
+
+        // set up initial camera state
+        this.camCenter = [0.0, 0.0];
+        this.camHalfSize = [10.0, 10.0];
+
+        // set up GPU buffers, pipelines, and bind groups
+        this.buffers = createSimBuffers(this.device, this.config, this.camCenter, this.camHalfSize);
+        this.pipelines = createSimPipelines(this.device);
+        this.bindGroups = createSimBindGroups(this.device, this.buffers, this.pipelines);
+    }
+
+    public getCommands(): GPUCommandBuffer {
+        const commandEncoder = this.device.createCommandEncoder();
+        const computePass = commandEncoder.beginComputePass();
+
+        const workgroupSize = 64;
+        const dispatchCount = Math.ceil(this.config.numBodies / workgroupSize);
+
+        for (let step = 0; step < this.config.substeps; step++) {
+            // half velocity step
+            computePass.setPipeline(this.pipelines.halfVelStep);
+            computePass.setBindGroup(0, this.bindGroups.halfVelStep);
+            computePass.dispatchWorkgroups(dispatchCount);
+
+            // position step
+            computePass.setPipeline(this.pipelines.posStep);
+            computePass.setBindGroup(0, this.bindGroups.posStep);
+            computePass.dispatchWorkgroups(dispatchCount);
+
+            // half velocity step
+            computePass.setPipeline(this.pipelines.halfVelStep);
+            computePass.setBindGroup(0, this.bindGroups.halfVelStep);
+            computePass.dispatchWorkgroups(dispatchCount);
+        }
+
+        computePass.end();
+        return commandEncoder.finish();
+    }
+
+    public getBuffers(): SimBuffers {
+        return this.buffers;
+    }
+    public getConfig(): SimConfig {
+        return this.config;
+    }
+    public getCamCenter(): [number, number] {
+        return this.camCenter;
+    }
+    public getCamHalfSize(): [number, number] {
+        return this.camHalfSize;
+    }
+    public getViewPort(): [number, number] {
+        return this.config.viewPort;
+    }
+    
+}
