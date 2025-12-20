@@ -50,7 +50,10 @@ fn half_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let dist_squared = dot(r, r);
 
         let m_eff = max(m1, m2);
-        let eps = sqrt(g * m_eff * dt);
+        let v_eff = max(1.0, max(length(vel_buf[i]), length(vel_buf[j])));
+        // let v_eff = 1.0;
+        let k = 0.38490017946;
+        let eps = sqrt(k * g * m_eff * dt / (0.001 * v_eff));
 
         let inv_denom = inverseSqrt(dist_squared + eps * eps);
         let inv_denom_3 = inv_denom * inv_denom * inv_denom;

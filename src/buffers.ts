@@ -37,6 +37,7 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
 
     // mass buffer
     const massArray = new Float32Array(config.numBodies).fill(1.0);
+    massArray[0] = 100000.0;
     const massBuffer = createBuffer(device, massArray);
 
     // pos buffer
