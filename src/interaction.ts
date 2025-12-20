@@ -152,7 +152,7 @@ export class InteractionController {
     }
 
     private onResize(): void {
-        const { displayWidth, displayHeight, dpr } = this.resizeCanvasToDisplaySize();
+        const { displayWidth, displayHeight } = this.resizeCanvasToDisplaySize();
         const viewPort = this.sim.getViewPort();
         viewPort[0] = displayWidth;
         viewPort[1] = displayHeight;
@@ -176,7 +176,8 @@ export class InteractionController {
         const { uintMetadataArray, floatMetadataArray } = buildMetadataArrays(
             this.sim.getConfig(),
             this.sim.getCamCenter(),
-            this.sim.getCamHalfSize()
+            this.sim.getCamHalfSize(),
+            this.sim.getViewPort()
         );
 
         this.device.queue.writeBuffer(
