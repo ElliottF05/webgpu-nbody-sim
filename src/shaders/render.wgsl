@@ -64,7 +64,7 @@ fn vertex_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u3
     let center_ndc = world_to_ndc(world_pos);
 
     // pixel and NDC radius
-    let radius_px = 2.5;
+    let radius_px = 0.65;
     let px_to_ndc = 2.0 / float_metadata.viewport;
     let radius_ndc = radius_px * px_to_ndc;
 
@@ -85,11 +85,7 @@ fn fragment_main(in: VSOut) -> @location(0) vec4<f32> {
     let aa_width = max(fwidth(r), 0.01);
     let edge = 1.0 - smoothstep(1.0 - aa_width, 1.0 + aa_width, r);
 
-    // gaussian falloff for nice point look
-    let k = 10.0;
-    let intensity = exp(-k * r * r);
-
-    let alpha = edge * intensity;
+    let alpha = edge;
 
     // base color
     let color = vec3<f32>(0.85, 0.88, 0.95);
