@@ -6,7 +6,7 @@ export type SimConfig = Readonly<{
     substeps: number;
     viewPort: [number, number];
     deltaTime: number;
-    epsilon: number;
+    epsilonMultiplier: number;
 }>;
 
 export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
@@ -17,7 +17,7 @@ export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
     const substeps = 10;
     const viewPort: [number, number] = [canvas.width, canvas.height];
     const deltaTime = 0.1 * 1.0 / (60.0 * substeps);
-    const epsilon = 1.0 * Math.pow(gravConstant * 2 * maxMass * (minStepsPerOrbit * deltaTime / (2 * Math.PI)) * (minStepsPerOrbit * deltaTime / (2 * Math.PI)), 1.0 / 3.0);
+    const epsilonMultiplier = 1.0;
 
     return {
         numBodies,
@@ -27,6 +27,6 @@ export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
         substeps,
         viewPort,
         deltaTime,
-        epsilon,
+        epsilonMultiplier,
     };
 }

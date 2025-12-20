@@ -37,7 +37,7 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
 
     // mass buffer
     const massArray = new Float32Array(config.numBodies).fill(1.0);
-    massArray[0] = 100000.0;
+    massArray[0] = 100.0;
     const massBuffer = createBuffer(device, massArray);
 
     // pos buffer
@@ -71,7 +71,7 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
 
 export function buildMetadataArrays(config: SimConfig, camCenter: [number, number], camHalfSize: [number, number]): { uintMetadataArray: Uint32Array; floatMetadataArray: Float32Array } {
     const uintMetadataArray = new Uint32Array([config.numBodies]);
-    const floatMetadataArray = new Float32Array([config.gravConstant, config.deltaTime, config.epsilon, 0.0, ...camCenter, ...camHalfSize, ...config.viewPort]);
+    const floatMetadataArray = new Float32Array([config.gravConstant, config.deltaTime, config.epsilonMultiplier, 0.0, ...camCenter, ...camHalfSize, ...config.viewPort]);
     return { uintMetadataArray, floatMetadataArray };
 }
 
