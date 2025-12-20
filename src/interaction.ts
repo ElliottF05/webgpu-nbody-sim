@@ -4,19 +4,26 @@ import type { Simulation } from "./simulation";
 
 export class InteractionController {
     private readonly device: GPUDevice;
+    private readonly format: GPUTextureFormat;
     private readonly canvas: HTMLCanvasElement;
+    private readonly context: GPUCanvasContext;
+
     private readonly sim: Simulation;
+
     private isDragging: boolean = false;
     private lastMousePos: [number, number] = [0, 0];
     
-    public constructor(device: GPUDevice, canvas: HTMLCanvasElement, sim: Simulation) {
+    public constructor(device: GPUDevice, format: GPUTextureFormat, canvas: HTMLCanvasElement, context: GPUCanvasContext, sim: Simulation) {
         this.device = device;
+        this.format = format;
         this.canvas = canvas;
+        this.context = context;
         this.sim = sim;
 
         // set up event listeners
         this.addScrollListener();
         this.addDragListener();
+        this.addResizeListener();
     }
 
     private getMouseWorldPos(clientX: number, clientY: number): [number, number] {
@@ -121,6 +128,47 @@ export class InteractionController {
 
         this.canvas.addEventListener("pointerup", endPan);
         this.canvas.addEventListener("pointercancel", endPan);
+    }
+
+    private resizeCanvasToDisplaySize() {
+        const dpr = window.devicePixelRatio || 1;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const displayWidth = Math.max(1, Math.round(rect.width * dpr));
+        const displayHeight = Math.max(1, Math.round(rect.height * dpr));
+
+        if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+            this.canvas.width = displayWidth;
+            this.canvas.height = displayHeight;
+
+            this.context.configure({
+                device: this.device,
+                format: this.format,
+                alphaMode: "premultiplied",
+            });
+        }
+
+        return { displayWidth, displayHeight, dpr };
+    }
+
+    private onResize(): void {
+        const { displayWidth, displayHeight, dpr } = this.resizeCanvasToDisplaySize();
+        const viewPort = this.sim.getViewPort();
+        viewPort[0] = displayWidth;
+        viewPort[1] = displayHeight;
+        
+        // adjust camera half size to maintain aspect ratio
+        const camHalfSize = this.sim.getCamHalfSize();
+        const aspect = displayWidth / displayHeight;
+        camHalfSize[0] = camHalfSize[1] * aspect;
+    }
+
+    private addResizeListener() {
+        window.addEventListener("resize", () => {
+            this.onResize();
+        });
+        // call once to set initial size
+        this.onResize();
     }
 
     public sendUpdateToGPU(): void {

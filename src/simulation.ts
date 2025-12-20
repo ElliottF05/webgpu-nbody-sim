@@ -15,6 +15,7 @@ export class Simulation implements GPUCommandSource {
     // dynamic state
     private camCenter: [number, number];
     private camHalfSize: [number, number];
+    private viewPort: [number, number];
 
     // GPU buffers, pipelines, and bind groups
     private buffers: SimBuffers;
@@ -32,6 +33,7 @@ export class Simulation implements GPUCommandSource {
         // set up initial camera state
         this.camCenter = [0.0, 0.0];
         this.camHalfSize = [10.0, 10.0];
+        this.viewPort = this.config.viewPort;
 
         // set up GPU buffers, pipelines, and bind groups
         this.buffers = createSimBuffers(this.device, this.config, this.camCenter, this.camHalfSize);

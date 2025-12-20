@@ -12,7 +12,7 @@ async function main() {
 
     const sim = new Simulation(device, canvas);
     const renderer = new Renderer(device, context, sim.getConfig(),sim.getBuffers(), canvasFormat);
-    const interaction = new InteractionController(device, canvas, sim);
+    const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);  
 
     function frame() {
         device.queue.submit([
