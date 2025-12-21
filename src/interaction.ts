@@ -155,14 +155,9 @@ export class InteractionController {
     private addControlPanelListeners() {
         const modeRadios = document.getElementsByName("mode") as NodeListOf<HTMLInputElement>;
         modeRadios.forEach(radio => {
-            radio.addEventListener("change", (e) => {
+            radio.addEventListener("change", (_e) => {
                 if (radio.checked) {
                     this.interactionMode = radio.value as "camera" | "body";
-                    if (this.interactionMode === "body") {
-                        this.sim.setUserBodyMass(this.userBodySliderValue);
-                    } else {
-                        this.sim.setUserBodyMass(0.0);
-                    }
                 }
             });
         });
@@ -170,7 +165,7 @@ export class InteractionController {
         const massSlider = document.getElementById("massSlider") as HTMLInputElement;
         const massValue = document.getElementById("massValue") as HTMLSpanElement;
 
-        massSlider.addEventListener("input", (e) => {
+        massSlider.addEventListener("input", (_e) => {
             const sliderVal = parseFloat(massSlider.value);
             const a = 10; // larger => steeper ends, flatter center
             const value = Math.sinh(a * sliderVal) / Math.sinh(a) * 100_000;
