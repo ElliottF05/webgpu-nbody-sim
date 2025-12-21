@@ -11,6 +11,7 @@ export class InteractionController {
     private readonly sim: Simulation;
 
     private interactionMode: "camera" | "body" = "camera";
+    private userBodySliderValue: number = 0.0;
     private isMouseDown: boolean = false;
     private lastMousePos: [number, number] = [0, 0];
     
@@ -25,6 +26,7 @@ export class InteractionController {
         this.addScrollListener();
         this.addDragListener();
         this.addResizeListener();
+        this.addControlPanelListeners();
     }
 
     private getMouseWorldPos(clientX: number, clientY: number): [number, number] {
@@ -91,7 +93,7 @@ export class InteractionController {
             const userBodyPos = this.sim.getUserBodyPos();
             userBodyPos[0] = worldX;
             userBodyPos[1] = worldY;
-            this.sim.setUserBodyMass(10000.0);
+            this.sim.setUserBodyMass(this.userBodySliderValue);
         }
 
         this.canvas.addEventListener("pointerdown", (e) => {
@@ -148,13 +150,42 @@ export class InteractionController {
 
         this.canvas.addEventListener("pointerup", endPan);
         this.canvas.addEventListener("pointercancel", endPan);
+    }
+
+    private addControlPanelListeners() {
+        const modeRadios = document.getElementsByName("mode") as NodeListOf<HTMLInputElement>;
+        modeRadios.forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                if (radio.checked) {
+                    this.interactionMode = radio.value as "camera" | "body";
+                    if (this.interactionMode === "body") {
+                        this.sim.setUserBodyMass(this.userBodySliderValue);
+                    } else {
+                        this.sim.setUserBodyMass(0.0);
+                    }
+                }
+            });
+        });
+
+        const massSlider = document.getElementById("massSlider") as HTMLInputElement;
+        const massValue = document.getElementById("massValue") as HTMLSpanElement;
+
+        massSlider.addEventListener("input", (e) => {
+            const sliderVal = parseFloat(massSlider.value);
+            const a = 10; // larger => steeper ends, flatter center
+            const value = Math.sinh(a * sliderVal) / Math.sinh(a) * 100_000;
+            massValue.textContent = value.toFixed(1);
+            this.userBodySliderValue = value;
+        });
 
         window.addEventListener("keydown", (e) => {
             if (e.key === "v") {
                 if (this.interactionMode === "body") {
                     this.interactionMode = "camera";
+                    this.sim.setUserBodyMass(0.0);
                 } else {
                     this.interactionMode = "body";
+                    this.sim.setUserBodyMass(this.userBodySliderValue);
                 }
             }
         });
