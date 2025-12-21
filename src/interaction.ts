@@ -10,7 +10,8 @@ export class InteractionController {
 
     private readonly sim: Simulation;
 
-    private isDragging: boolean = false;
+    private interactionMode: "camera" | "body" = "camera";
+    private isMouseDown: boolean = false;
     private lastMousePos: [number, number] = [0, 0];
     
     public constructor(device: GPUDevice, format: GPUTextureFormat, canvas: HTMLCanvasElement, context: GPUCanvasContext, sim: Simulation) {
@@ -85,49 +86,74 @@ export class InteractionController {
     }
 
     private addDragListener() {
+        const setUserBodyPos = (clientX: number, clientY: number) => {
+            const [worldX, worldY] = this.getMouseWorldPos(clientX, clientY);
+            const userBodyPos = this.sim.getUserBodyPos();
+            userBodyPos[0] = worldX;
+            userBodyPos[1] = -worldY;
+            this.sim.setUserBodyMass(10000.0);
+        }
+
         this.canvas.addEventListener("pointerdown", (e) => {
             if (e.button !== 0) {
                 return; // must be left moust button
             }
-            this.isDragging = true;
+            this.isMouseDown = true;
             this.lastMousePos = [e.clientX, e.clientY];
             this.canvas.setPointerCapture(e.pointerId);
+
+            if (this.interactionMode === "body") {
+                setUserBodyPos(e.clientX, e.clientY);
+            }
         });
 
         this.canvas.addEventListener("pointermove", (e) => {
-            if (!this.isDragging) {
+            if (!this.isMouseDown) {
                 return;
             }
+            
+            if (this.interactionMode === "body") {
+                setUserBodyPos(e.clientX, e.clientY);
+            } else {
+                const rect = this.canvas.getBoundingClientRect();
+                const dxPixels = e.clientX - this.lastMousePos[0];
+                const dyPixels = e.clientY - this.lastMousePos[1];
+                this.lastMousePos = [e.clientX, e.clientY];
 
-            const rect = this.canvas.getBoundingClientRect();
-            const dxPixels = e.clientX - this.lastMousePos[0];
-            const dyPixels = e.clientY - this.lastMousePos[1];
-            this.lastMousePos = [e.clientX, e.clientY];
+                const camCenter = this.sim.getCamCenter();
+                const camHalfSize = this.sim.getCamHalfSize();
 
-            const camCenter = this.sim.getCamCenter();
-            const camHalfSize = this.sim.getCamHalfSize();
+                const worldPerPixelX = (2 * camHalfSize[0]) / rect.width;
+                const worldPerPixelY = (2 * camHalfSize[1]) / rect.height;
 
-            const worldPerPixelX = (2 * camHalfSize[0]) / rect.width;
-            const worldPerPixelY = (2 * camHalfSize[1]) / rect.height;
-
-            camCenter[0] -= dxPixels * worldPerPixelX;
-            camCenter[1] += dyPixels * worldPerPixelY
+                camCenter[0] -= dxPixels * worldPerPixelX;
+                camCenter[1] += dyPixels * worldPerPixelY
+            }
         });
 
         const endPan = (e: PointerEvent) => {
-            if (!this.isDragging) {
+            if (!this.isMouseDown) {
                 return;
             }
-            this.isDragging = false;
+            this.isMouseDown = false;
             try {
                 this.canvas.releasePointerCapture(e.pointerId);
             } catch {
                 // do nothing
             }
+            if (this.interactionMode === "body") {
+                this.sim.setUserBodyMass(0.0);
+            }
         }
 
         this.canvas.addEventListener("pointerup", endPan);
         this.canvas.addEventListener("pointercancel", endPan);
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "v") {
+                this.interactionMode = "body";
+            }
+        });
     }
 
     private resizeCanvasToDisplaySize() {
@@ -194,6 +220,26 @@ export class InteractionController {
             floatMetadataArray.buffer,
             floatMetadataArray.byteOffset,
             floatMetadataArray.byteLength
+        );
+
+        // sync user body mass and pos
+        const userBodyMassArray = new Float32Array([this.sim.getUserBodyMass()]);
+        this.device.queue.writeBuffer(
+            this.sim.getBuffers().mass,
+            0,
+            userBodyMassArray.buffer,
+            userBodyMassArray.byteOffset,
+            userBodyMassArray.byteLength
+        );
+
+        const userBodyPos = this.sim.getUserBodyPos();
+        const userBodyPosArray = new Float32Array([userBodyPos[0], userBodyPos[1]]);
+        this.device.queue.writeBuffer(
+            this.sim.getBuffers().pos,
+            0,
+            userBodyPosArray.buffer,
+            userBodyPosArray.byteOffset,
+            userBodyPosArray.byteLength
         );
     }
 }

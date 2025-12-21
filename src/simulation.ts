@@ -17,6 +17,10 @@ export class Simulation implements GPUCommandSource {
     private camHalfSize: [number, number];
     private viewPort: [number, number];
 
+    // user-controlled body state
+    private userBodyPos: [number, number];
+    private userBodyMass: number;
+
     // GPU buffers, pipelines, and bind groups
     private buffers: SimBuffers;
     private pipelines: SimPipelines;
@@ -34,6 +38,10 @@ export class Simulation implements GPUCommandSource {
         this.camCenter = [0.0, 0.0];
         this.camHalfSize = [10.0, 10.0];
         this.viewPort = this.config.viewPort;
+        
+        // set up initial user body state
+        this.userBodyPos = [0.0, 0.0];
+        this.userBodyMass = 0.0;
 
         // set up GPU buffers, pipelines, and bind groups
         this.buffers = createSimBuffers(this.device, this.config, this.camCenter, this.camHalfSize, this.viewPort);
@@ -83,6 +91,15 @@ export class Simulation implements GPUCommandSource {
     }
     public getViewPort(): [number, number] {
         return this.config.viewPort;
+    }
+    public getUserBodyPos(): [number, number] {
+        return this.userBodyPos;
+    }
+    public getUserBodyMass(): number {
+        return this.userBodyMass;
+    }
+    public setUserBodyMass(mass: number): void {
+        this.userBodyMass = mass;
     }
     
 }

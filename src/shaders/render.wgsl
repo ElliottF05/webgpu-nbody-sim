@@ -64,7 +64,11 @@ fn vertex_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u3
     let center_ndc = world_to_ndc(world_pos);
 
     // pixel and NDC radius
-    let radius_px = 0.65;
+    var radius_px: f32 = 0.65;
+    if iid == 0u {
+        // make user-controlled body slightly larger
+        radius_px = 2.0;
+    }
     let px_to_ndc = 2.0 / float_metadata.viewport;
     let radius_ndc = radius_px * px_to_ndc;
 
