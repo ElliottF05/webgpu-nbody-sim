@@ -39,7 +39,7 @@ export function createSimBindGroups(device: GPUDevice, buffers: SimBuffers, pipe
             { binding: 1, resource: { buffer: buffers.uintMetadata } },
             { binding: 2, resource: { buffer: buffers.pos } },
             { binding: 3, resource: { buffer: buffers.mortonCodes } },
-            // { binding: 4, resource: { buffer: buffers.indices } },
+            { binding: 4, resource: { buffer: buffers.indices } },
         ]
     });
 

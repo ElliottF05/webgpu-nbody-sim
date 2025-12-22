@@ -40,13 +40,14 @@ fn compute_morton_codes_main(@builtin(global_invocation_id) global_id: vec3<u32>
     }
 
     let scale = 10000.0; // side length of the square region we map to
+    let half = 0.5 * scale;
 
     let pos = pos_buf[i];
-    let shifted = pos + 0.5 * scale; // map to [0, scale]
-    let clamped = clamp(shifted, vec2<f32>(0.0), vec2<f32>(scale)); // clamp to [0, scale]
+    var uv = (pos + vec2<f32>(half)) / vec2<f32>(scale); // map from [-half, half] to [0,1]
+    uv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)); // clamp to [0, 1]
 
-    let x = u32(clamped.x); // 16 bits
-    let y = u32(clamped.y); // 16 bits
+    let x = min(u32(round(uv.x * 65535.0)), 65535u); // 16 bits
+    let y = min(u32(round(uv.y * 65535.0)), 65535u); // 16 bits
 
     var morton_code = 0u;
     for (var bit = 0u; bit < 16u; bit += 1u) {
@@ -57,4 +58,5 @@ fn compute_morton_codes_main(@builtin(global_invocation_id) global_id: vec3<u32>
     }
 
     morton_codes[i] = morton_code;
+    indices[i] = i;
 }
