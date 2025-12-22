@@ -57,6 +57,11 @@ export class Simulation implements GPUCommandSource {
         const dispatchCount = Math.ceil(this.config.numBodies / workgroupSize);
 
         for (let step = 0; step < this.config.substeps; step++) {
+            // compute morton codes step
+            computePass.setPipeline(this.pipelines.computeMortonStep);
+            computePass.setBindGroup(0, this.bindGroups.computeMortonStep);
+            computePass.dispatchWorkgroups(dispatchCount);
+            
             // half velocity step
             computePass.setPipeline(this.pipelines.halfVelStep);
             computePass.setBindGroup(0, this.bindGroups.halfVelStep);

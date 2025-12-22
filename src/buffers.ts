@@ -27,6 +27,8 @@ export type SimBuffers = {
     mass: GPUBuffer;
     pos: GPUBuffer;
     vel: GPUBuffer;
+    mortonCodes: GPUBuffer;
+    indices: GPUBuffer;
 };
 
 export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter: [number, number], camHalfSize: [number, number], viewPort: [number, number]): SimBuffers {
@@ -62,12 +64,22 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
     initVelArray[3] = 20.0;
     const velBuffer = createBuffer(device, initVelArray);
 
+    // morton codes buffer
+    const mortonCodesArray = new Uint32Array(config.numBodies).fill(0);
+    const mortonCodesBuffer = createBuffer(device, mortonCodesArray);
+
+    // indices buffer
+    const indicesArray = new Uint32Array(config.numBodies).map((_v, i) => i);
+    const indicesBuffer = createBuffer(device, indicesArray);
+
     return {
         floatMetadata: floatMetadataBuffer,
         uintMetadata: uintMetadataBuffer,
         mass: massBuffer,
         pos: posBuffer,
         vel: velBuffer,
+        mortonCodes: mortonCodesBuffer,
+        indices: indicesBuffer,
     };
 }
 

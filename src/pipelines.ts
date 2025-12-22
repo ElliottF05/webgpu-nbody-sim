@@ -1,23 +1,29 @@
 import physicsShaderCode from "./shaders/physics.wgsl?raw";
 import renderShaderCode from "./shaders/render.wgsl?raw";
+import lbvhShaderCode from "./shaders/lbvh.wgsl?raw";
 
 
 // SIM PIPELINES
 export type SimPipelines = {
-    shaderModule: GPUShaderModule;
+    physicsShaderModule: GPUShaderModule;
+    lbvhShaderModule: GPUShaderModule;
     halfVelStep: GPUComputePipeline;
     posStep: GPUComputePipeline;
+    computeMortonStep: GPUComputePipeline;
 };
 
 export function createSimPipelines(device: GPUDevice): SimPipelines {
-    const shaderModule = device.createShaderModule({
+    const physicsShaderModule = device.createShaderModule({
         code: physicsShaderCode,
+    });
+    const lbvhShaderModule = device.createShaderModule({
+        code: lbvhShaderCode,
     });
 
     const halfVelocityStepPipeline = device.createComputePipeline({
         layout: "auto",
         compute: {
-            module: shaderModule,
+            module: physicsShaderModule,
             entryPoint: "half_vel_step_main",
         },
     });
@@ -25,15 +31,25 @@ export function createSimPipelines(device: GPUDevice): SimPipelines {
     const posStepPipeline = device.createComputePipeline({
         layout: "auto",
         compute: {
-            module: shaderModule,
+            module: physicsShaderModule,
             entryPoint: "pos_step_main",
         },
     });
 
+    const computeMortonStepPipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: {
+            module: lbvhShaderModule,
+            entryPoint: "compute_morton_codes_main",
+        },
+    });
+
     return {
-        shaderModule,
+        physicsShaderModule: physicsShaderModule,
+        lbvhShaderModule: lbvhShaderModule,
         halfVelStep: halfVelocityStepPipeline,
         posStep: posStepPipeline,
+        computeMortonStep: computeMortonStepPipeline,
     };
 }
 

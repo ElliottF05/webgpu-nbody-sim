@@ -6,6 +6,7 @@ import type { RenderPipelines, SimPipelines } from "./pipelines";
 export type SimBindGroups = Readonly<{
     halfVelStep: GPUBindGroup;
     posStep: GPUBindGroup;
+    computeMortonStep: GPUBindGroup;
 }>;
 
 export function createSimBindGroups(device: GPUDevice, buffers: SimBuffers, pipelines: SimPipelines): SimBindGroups {
@@ -31,9 +32,21 @@ export function createSimBindGroups(device: GPUDevice, buffers: SimBuffers, pipe
         ]
     });
 
+    const computeMortonStepBindGroup = device.createBindGroup({
+        layout: pipelines.computeMortonStep.getBindGroupLayout(0),
+        entries: [
+            // { binding: 0, resource: { buffer: buffers.floatMetadata } },
+            { binding: 1, resource: { buffer: buffers.uintMetadata } },
+            { binding: 2, resource: { buffer: buffers.pos } },
+            { binding: 3, resource: { buffer: buffers.mortonCodes } },
+            // { binding: 4, resource: { buffer: buffers.indices } },
+        ]
+    });
+
     return {
         halfVelStep: halfVelStepBindGroup,
         posStep: posStepBindGroup,
+        computeMortonStep: computeMortonStepBindGroup,
     };
 }
 
