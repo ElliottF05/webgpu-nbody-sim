@@ -1,2 +1,2 @@
-# webgpu-fluid-sim
-A simple fluid sim built using WebGPU compute shaders.
+# webgpu-nbody-sim
+A simple n-body sim built using WebGPU compute shaders.
