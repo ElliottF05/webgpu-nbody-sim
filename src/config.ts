@@ -11,7 +11,7 @@ export type SimConfig = Readonly<{
 export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
     const numBodies = 100000;
     const gravConstant = 1.0;
-    const bhTheta = 0.5;
+    const bhTheta = 0.6;
     const substeps = 1;
     const viewPort: [number, number] = [canvas.width, canvas.height];
     const deltaTime = 0.1 * 1.0 / (60.0 * substeps);

@@ -60,14 +60,14 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
 
     // mass buffer
     const massArray = new Float32Array(config.numBodies).fill(1.0);
-    massArray[1] = 10000.0;
+    // massArray[1] = 10000.0;
     const massBuffer = createBuffer(device, massArray);
 
     // pos buffer
     const initPosArray = new Float32Array(2 * config.numBodies).fill(0.0);
     for (let i = 0; i < config.numBodies; i++) {
-        const x = (Math.random() - 0.5) * 15.0;
-        const y = (Math.random() - 0.5) * 15.0;
+        const x = (Math.random() - 0.5) * 50.0;
+        const y = (Math.random() - 0.5) * 50.0;
         initPosArray[2 * i] = x;
         initPosArray[2 * i + 1] = y;
     }
@@ -77,8 +77,8 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
     // velocity buffer
     const initVelArray = new Float32Array(2 * config.numBodies).fill(0.0);
     for (let i = 0; i < config.numBodies; i++) {
-        const x = (Math.random() - 0.5) * 10.0;
-        const y = (Math.random() - 0.5) * 10.0;
+        const x = (Math.random() - 0.5) * 0.0;
+        const y = (Math.random() - 0.5) * 0.0;
         initVelArray[2 * i] = x;
         initVelArray[2 * i + 1] = y;
     }
@@ -90,7 +90,7 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
     const mortonCodesBuffer = createBuffer(device, mortonCodesArray);
 
     // indices buffer
-    const bodyIndicesArray = new Uint32Array(config.numBodies).map((_v, i) => i);
+    const bodyIndicesArray = new Uint32Array(config.numBodies).fill(0);
     const bodyIndicesBuffer = createBuffer(device, bodyIndicesArray);
 
     // node data buffer (each node_data is 12 * 4 = 48 bytes):
