@@ -86,115 +86,86 @@ fn delta(i: i32, j: i32) -> i32 {
     return i32(countLeadingZeros(a ^ b));
 }
 
-fn determine_range(i_u: u32) -> vec2<u32> {
-    let n_u = uint_metadata.num_bodies;
-    let n = i32(n_u);
+@compute @workgroup_size(64)
+fn build_lbvh_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    // this exactly follows figure 4 in
+    // https://developer.nvidia.com/blog/parallelforall/wp-content/uploads/2012/11/karras2012hpg_paper.pdf
+    
+    let i_u = global_id.x;
     let i = i32(i_u);
+    let n = uint_metadata.num_bodies;
 
-    // choose direction d
-    let d_left = delta(i, i - 1);
-    let d_right = delta(i, i + 1);
-    let d: i32 = select(-1, 1, d_right > d_left);
+    // internal nodes are indexed [0, n-2], leaves are [n-1, 2n-2]
+    if i_u >= n - 1u {
+        return;
+    }
 
-    let delta_min = delta(i, i - d); // get common prefix length in direction we're not expanding towards
+    // determine direction of the range
+    let delta_left = delta(i, i - 1);
+    let delta_right = delta(i, i + 1);
+    let d = select(-1, 1, delta(i, i + 1) > delta(i, i - 1));
 
-    // exponential search to find upper bound for the length of the range
-    var l_max: i32 = 2;
+    // compute upper bound for the length of the range
+    let delta_min = delta(i, i - d);
+    var l_max = 2;
     while delta(i, i + d * l_max) > delta_min {
         l_max = l_max * 2;
     }
 
-    // binary search to find the exact end of the range
-    var l: i32 = 0;
-    var step: i32 = l_max;
-    while step > 1 {
-        step = (step + 1) / 2;
-        let j = i + d * (l + step);
-        if delta(i, j) > delta_min {
-            l = l + step;
+    // find the other end using binary search
+    var l = 0;
+    var t = l_max / 2;
+    while t >= 1 {
+        if delta(i, i + d * (l + t)) > delta_min {
+            l = l + t;
         }
+        t = t / 2;
     }
-
     let j = i + d * l;
+    let j_u = u32(j);
 
-    let first = min(i, j);
-    let last = max(i, j);
-    return vec2<u32>(u32(first), u32(last));
-}
-
-fn find_split(first: u32, last: u32) -> u32 {
-    let first_code = morton_codes[first];
-    let last_code = morton_codes[last];
-
-    // split in middle if identical morton codes
-    if first_code == last_code {
-        return (first + last) >> 1u;
-    }
-
-    // find number of leading identical bits
-    let delta_node = delta(i32(first), i32(last));
-
-    // binary search to find the split point (greatest index where prefix is > common_prefix)
-    var split = first;
-    var step = last - first;
+    // find the split position using binary search
+    let delta_node = delta(i, j);
+    var s = 0;
+    t = (l + 1) / 2; // ceil division
     loop {
-        step = (step + 1u) >> 1u;
-        let new_split = split + step;
-        if new_split < last {
-            let split_code = morton_codes[new_split];
-            let delta_split = delta(i32(first), i32(new_split));
-            if delta_split > delta_node {
-                split = new_split;
-            }
+        if delta(i, i + d * (s + t)) > delta_node {
+            s = s + t;
         }
-        if step <= 1u {
+        if t == 1 {
             break;
         }
+        t = (t + 1) / 2;
     }
+    let gamma = i + d * s + min(d, 0);
+    let gamma_u = u32(gamma);
 
-    return split;
-}
-
-@compute @workgroup_size(64)
-fn build_lbvh_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let i = global_id.x;
-    let n = uint_metadata.num_bodies;
-
-    // internal nodes are indexed [0, n-2], leaves are [n-1, 2n-2]
-    if i >= n - 1u {
-        return;
-    }
-
-    // find which range of bodies this internal node covers
-    let range = determine_range(i);
-    let first = range.x;
-    let last = range.y;
-
-    // find where to split this range
-    let split = find_split(first, last);
 
     // get left child
-    if split == first { // child is leaf node
-        node_data[i].left_child = (n - 1u) + split;
+    if min(i, j) == gamma { // child is leaf node
+        node_data[i_u].left_child = (n - 1u) + gamma_u;
     } else {
-        node_data[i].left_child = split;
+        node_data[i_u].left_child = gamma_u;
     }
 
     // get right child
-    if split + 1u == last { // child is leaf node
-        node_data[i].right_child = (n - 1u) + (split + 1u);
+    if max(i, j) == gamma + 1 { // child is leaf node
+        node_data[i_u].right_child = (n - 1u) + (gamma_u + 1u);
     } else {  
-        node_data[i].right_child = split + 1u;
+        node_data[i_u].right_child = gamma_u + 1u;
     }
 
     // set parent pointers
-    let left_idx = node_data[i].left_child;
-    let right_idx = node_data[i].right_child;
-    node_data[left_idx].parent = i;
-    node_data[right_idx].parent = i;
+    let left_idx = node_data[i_u].left_child;
+    let right_idx = node_data[i_u].right_child;
+    node_data[left_idx].parent = i_u;
+    node_data[right_idx].parent = i_u;
+    if i_u == 0u {
+        node_data[i_u].parent = 0xFFFFFFFFu; // root has no parent
+    }
 
     // set to unvisited
-    atomicStore(&node_status[i], 0u);
+    atomicStore(&node_status[i_u], 0u);
 }
 
 
@@ -223,7 +194,7 @@ fn fill_lbvh_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var count = 0u;
     while curr_idx != 0u {
         count = count + 1u;
-        if count > 2000u {
+        if count > 200000u {
             break; // prevent infinite loops
         }
         let parent_idx = node_data[curr_idx].parent;

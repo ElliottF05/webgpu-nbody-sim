@@ -5,7 +5,7 @@ import type { SimConfig } from "./config";
 function createBuffer(device: GPUDevice, initialData: Uint32Array | Float32Array): GPUBuffer {
     const buffer = device.createBuffer({
         size: initialData.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
     device.queue.writeBuffer(buffer, 0, initialData.buffer, initialData.byteOffset, initialData.byteLength);
     return buffer;
@@ -17,6 +17,25 @@ function createMetadataBuffer(device: GPUDevice, initialData: Uint32Array | Floa
     });
     device.queue.writeBuffer(buffer, 0, initialData.buffer, initialData.byteOffset, initialData.byteLength);
     return buffer;
+}
+
+// DEBUG: read buffer back to CPU
+export async function readBufferData<T extends Uint32Array | Float32Array>(device: GPUDevice, buffer: GPUBuffer, size: number, ArrayType: { new(buffer: ArrayBuffer): T; BYTES_PER_ELEMENT: number; }): Promise<T> {
+    const readBuffer = device.createBuffer({
+        size: size,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+
+    const commandEncoder = device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, size);
+    const commands = commandEncoder.finish();
+    device.queue.submit([commands]);
+
+    await readBuffer.mapAsync(GPUMapMode.READ);
+    const arrayBuffer = readBuffer.getMappedRange();
+    const data = new ArrayType(arrayBuffer.slice(0));
+    readBuffer.unmap();
+    return data;
 }
 
 
@@ -47,8 +66,8 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
     // pos buffer
     const initPosArray = new Float32Array(2 * config.numBodies).fill(0.0);
     for (let i = 0; i < config.numBodies; i++) {
-        const x = (Math.random() - 0.5) * 15;
-        const y = (Math.random() - 0.5) * 15;
+        const x = (Math.random() - 0.5) * 15.0;
+        const y = (Math.random() - 0.5) * 15.0;
         initPosArray[2 * i] = x;
         initPosArray[2 * i + 1] = y;
     }
@@ -58,8 +77,8 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, camCenter
     // velocity buffer
     const initVelArray = new Float32Array(2 * config.numBodies).fill(0.0);
     for (let i = 0; i < config.numBodies; i++) {
-        const x = (Math.random() - 0.5) * 1.0;
-        const y = (Math.random() - 0.5) * 1.0;
+        const x = (Math.random() - 0.5) * 10.0;
+        const y = (Math.random() - 0.5) * 10.0;
         initVelArray[2 * i] = x;
         initVelArray[2 * i + 1] = y;
     }
