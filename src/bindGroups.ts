@@ -4,8 +4,6 @@ import type { RenderPipelines, SimPipelines } from "./pipelines";
 
 // SIMULATION BIND GROUPS
 export type SimBindGroups = Readonly<{
-    halfVelStep: GPUBindGroup;
-    posStep: GPUBindGroup;
     computeMortonStep: GPUBindGroup;
     buildLBVHStep: GPUBindGroup;
     fillLBVHStep: GPUBindGroup;
@@ -14,28 +12,6 @@ export type SimBindGroups = Readonly<{
 }>;
 
 export function createSimBindGroups(device: GPUDevice, buffers: SimBuffers, pipelines: SimPipelines): SimBindGroups {
-    const halfVelStepBindGroup = device.createBindGroup({
-        layout: pipelines.halfVelStep.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: { buffer: buffers.floatMetadata } },
-            { binding: 1, resource: { buffer: buffers.uintMetadata } },
-            { binding: 2, resource: { buffer: buffers.mass } },
-            { binding: 3, resource: { buffer: buffers.pos } },
-            { binding: 4, resource: { buffer: buffers.vel } },
-        ]
-    });
-
-    const posStepBindGroup = device.createBindGroup({
-        layout: pipelines.posStep.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: { buffer: buffers.floatMetadata } },
-            { binding: 1, resource: { buffer: buffers.uintMetadata } },
-            // { binding: 2, resource: { buffer: buffers.mass } },
-            { binding: 3, resource: { buffer: buffers.pos } },
-            { binding: 4, resource: { buffer: buffers.vel } },
-        ]
-    });
-
     const computeMortonStepBindGroup = device.createBindGroup({
         layout: pipelines.computeMorton.getBindGroupLayout(0),
         entries: [
@@ -93,8 +69,6 @@ export function createSimBindGroups(device: GPUDevice, buffers: SimBuffers, pipe
     });
 
     return {
-        halfVelStep: halfVelStepBindGroup,
-        posStep: posStepBindGroup,
         computeMortonStep: computeMortonStepBindGroup,
         buildLBVHStep: buildLBVHBindGroup,
         fillLBVHStep: fillLBVHBindGroup,

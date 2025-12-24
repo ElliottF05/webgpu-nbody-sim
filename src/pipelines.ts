@@ -1,4 +1,3 @@
-import physicsShaderCode from "./shaders/physics.wgsl?raw";
 import renderShaderCode from "./shaders/render.wgsl?raw";
 import lbvhShaderCode from "./shaders/lbvh.wgsl?raw";
 import barnesHutShaderCode from "./shaders/barnes_hut.wgsl?raw";
@@ -9,11 +8,8 @@ import type { Simulation } from "./simulation";
 
 // SIM PIPELINES
 export type SimPipelines = {
-    physicsShaderModule: GPUShaderModule;
     lbvhShaderModule: GPUShaderModule;
     barnesHutShaderModule: GPUShaderModule;
-    halfVelStep: GPUComputePipeline;
-    posStep: GPUComputePipeline;
     computeMorton: GPUComputePipeline;
     sortMortonCodes: any;
     buildLBVH: GPUComputePipeline;
@@ -23,31 +19,12 @@ export type SimPipelines = {
 };
 
 export function createSimPipelines(device: GPUDevice, sim: Simulation): SimPipelines {
-    const physicsShaderModule = device.createShaderModule({
-        code: physicsShaderCode,
-    });
     const lbvhShaderModule = device.createShaderModule({
         code: lbvhShaderCode,
     });
     const barnesHutShaderModule = device.createShaderModule({
         code: barnesHutShaderCode,
-    });
-
-    const halfVelocityStepPipeline = device.createComputePipeline({
-        layout: "auto",
-        compute: {
-            module: physicsShaderModule,
-            entryPoint: "half_vel_step_main",
-        },
-    });
-
-    const posStepPipeline = device.createComputePipeline({
-        layout: "auto",
-        compute: {
-            module: physicsShaderModule,
-            entryPoint: "pos_step_main",
-        },
-    });
+    });;
 
     const computeMortonStepPipeline = device.createComputePipeline({
         layout: "auto",
@@ -100,11 +77,8 @@ export function createSimPipelines(device: GPUDevice, sim: Simulation): SimPipel
     });
 
     return {
-        physicsShaderModule: physicsShaderModule,
         lbvhShaderModule: lbvhShaderModule,
         barnesHutShaderModule: barnesHutShaderModule,
-        halfVelStep: halfVelocityStepPipeline,
-        posStep: posStepPipeline,
         computeMorton: computeMortonStepPipeline,
         sortMortonCodes: radixSortKernel,
         buildLBVH: buildLBVHPipeline,
