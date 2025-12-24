@@ -4,6 +4,9 @@ import { InteractionController } from "./interaction";
 import { Renderer } from "./renderer";
 import { Simulation } from "./simulation";
 
+const TARGET_FPS = 30;
+const FRAME_DURATION_MS = 1000.0 / TARGET_FPS;
+
 export interface GPUCommandSource {
     getCommands(): GPUCommandBuffer;
 }
@@ -15,14 +18,23 @@ async function main() {
     const renderer = new Renderer(device, context, sim.getConfig(),sim.getBuffers(), canvasFormat);
     const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);
 
+    let last = performance.now();
     function frame() {
+        requestAnimationFrame(frame);
+
+        const now = performance.now();
+        if (now - last < FRAME_DURATION_MS) {
+            return;
+        }
+        last = now;
+
+        interaction.sendUpdateToGPU();
         device.queue.submit([
             sim.getCommands(),
             renderer.getCommands(),
         ]);
-        interaction.sendUpdateToGPU();
-        requestAnimationFrame(frame);   
     }
+    
     requestAnimationFrame(frame);
 }
 
