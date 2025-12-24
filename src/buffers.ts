@@ -66,8 +66,11 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, numBodies
     // pos buffer
     const initPosArray = new Float32Array(2 * numBodies).fill(0.0);
     for (let i = 0; i < numBodies; i++) {
-        const x = (Math.random() - 0.5) * 50.0;
-        const y = (Math.random() - 0.5) * 50.0;
+        // distribute using 2d gaussian
+        const angle = Math.random() * 2.0 * Math.PI;
+        const radius = Math.sqrt(-2.0 * Math.log(Math.random())) * 5.0;
+        const x = radius * Math.cos(angle);
+        const y = radius * Math.sin(angle);
         initPosArray[2 * i] = x;
         initPosArray[2 * i + 1] = y;
     }
@@ -77,10 +80,16 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, numBodies
     // velocity buffer
     const initVelArray = new Float32Array(2 * numBodies).fill(0.0);
     for (let i = 0; i < numBodies; i++) {
-        const x = (Math.random() - 0.5) * 0.0;
-        const y = (Math.random() - 0.5) * 0.0;
-        initVelArray[2 * i] = x;
-        initVelArray[2 * i + 1] = y;
+        const x = initPosArray[2 * i];
+        const y = initPosArray[2 * i + 1];
+        // circular velocity
+        const dist = Math.sqrt(x * x + y * y) + 0.1;
+        const speed = 10 * Math.sqrt(100.0 / dist);
+        const angle = Math.atan2(y, x) + Math.PI / 2.0;
+        const vx = speed * Math.cos(angle);
+        const vy = speed * Math.sin(angle);
+        initVelArray[2 * i] = vx;
+        initVelArray[2 * i + 1] = vy;
     }
     // initVelArray[3] = 20.0;
     const velBuffer = createBuffer(device, initVelArray);
