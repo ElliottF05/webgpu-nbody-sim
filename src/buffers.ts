@@ -146,12 +146,20 @@ export type RenderBuffers = {
     floatMetadata: GPUBuffer;
     uintMetadata: GPUBuffer;
     pos: GPUBuffer;
+    densityTex: GPUTexture;
 };
 
-export function createRenderBuffers(simBuffers: SimBuffers): RenderBuffers {
+export function createRenderBuffers(device: GPUDevice, simBuffers: SimBuffers, viewPort: [number, number]): RenderBuffers {
+    const densityTexture = device.createTexture({
+        size: [viewPort[0], viewPort[1]],
+        format: "r16float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+
     return {
         floatMetadata: simBuffers.floatMetadata,
         uintMetadata: simBuffers.uintMetadata,
         pos: simBuffers.pos,
-    };
+        densityTex: densityTexture,
+    }
 }

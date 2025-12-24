@@ -25,7 +25,7 @@ export class Renderer implements GPUCommandSource {
         this.sim = sim;
 
         // GPU buffers, pipelines, and bind groups
-        this.buffers = createRenderBuffers(sim.getBuffers());
+        this.buffers = createRenderBuffers(device, sim.getBuffers(), sim.getViewPort());
         this.pipelines = createRenderPipelines(device, canvasFormat);
         this.bindGroups = createRenderBindGroups(device, this.buffers, this.pipelines);
     }
@@ -53,7 +53,7 @@ export class Renderer implements GPUCommandSource {
     }
 
     public updateBuffers(sim: Simulation): void {
-        this.buffers = createRenderBuffers(sim.getBuffers());
+        this.buffers = createRenderBuffers(this.device, sim.getBuffers(), sim.getViewPort());
         this.pipelines = createRenderPipelines(this.device, this.context.getCurrentTexture().format);
         this.bindGroups = createRenderBindGroups(this.device, this.buffers, this.pipelines);
     }

@@ -50,7 +50,7 @@ fn compute_morton_codes_main(@builtin(global_invocation_id) global_id: vec3<u32>
         return;
     }
 
-    let scale = 10000.0; // side length of the square region we map to
+    let scale = 2000.0; // side length of the square region we map to
     let half = 0.5 * scale;
 
     let pos = pos_buf[i];
