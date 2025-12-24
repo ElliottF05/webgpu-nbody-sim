@@ -26,7 +26,8 @@ export class InteractionController {
         this.addScrollListener();
         this.addDragListener();
         this.addResizeListener();
-        this.addControlPanelListeners();
+        this.addUserMassListeners();
+        this.addNumBodiesListeners();
     }
 
     private getMouseWorldPos(clientX: number, clientY: number): [number, number] {
@@ -152,7 +153,7 @@ export class InteractionController {
         this.canvas.addEventListener("pointercancel", endPan);
     }
 
-    private addControlPanelListeners() {
+    private addUserMassListeners() {
         const modeRadios = document.getElementsByName("mode") as NodeListOf<HTMLInputElement>;
         modeRadios.forEach(radio => {
             radio.addEventListener("change", (_e) => {
@@ -183,6 +184,17 @@ export class InteractionController {
                     this.sim.setUserBodyMass(this.userBodySliderValue);
                 }
             }
+        });
+    }
+
+    private addNumBodiesListeners() {
+        const numBodiesSelect = document.getElementById("numBodiesSelect") as HTMLInputElement;
+        numBodiesSelect.addEventListener("change", () => {
+            const numBodies = parseInt(numBodiesSelect.value, 10);
+            if (Number.isNaN(numBodies) || numBodies <= 0) {
+                return;
+            }
+            this.sim.setNumBodies(numBodies);
         });
     }
 
@@ -231,6 +243,7 @@ export class InteractionController {
         // sync metadata buffers
         const { uintMetadataArray, floatMetadataArray } = buildMetadataArrays(
             this.sim.getConfig(),
+            this.sim.getNumBodies(),
             this.sim.getCamCenter(),
             this.sim.getCamHalfSize(),
             this.sim.getViewPort()

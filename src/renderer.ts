@@ -1,8 +1,8 @@
 import { createRenderBindGroups, type RenderBindGroups } from "./bindGroups";
-import { createRenderBuffers, type RenderBuffers, type SimBuffers } from "./buffers";
-import type { SimConfig } from "./config";
+import { createRenderBuffers, type RenderBuffers } from "./buffers";
 import type { GPUCommandSource } from "./main";
 import { createRenderPipelines, type RenderPipelines } from "./pipelines";
+import type { Simulation } from "./simulation";
 
 
 export class Renderer implements GPUCommandSource {
@@ -10,22 +10,22 @@ export class Renderer implements GPUCommandSource {
     private readonly device: GPUDevice;
     private readonly context: GPUCanvasContext;
 
-    // sim config
-    private readonly config: SimConfig;
+    // sim instance
+    private readonly sim: Simulation;
 
     // GPU buffers, pipelines, and bind groups
     private buffers: RenderBuffers;
     private pipelines: RenderPipelines;
     private bindGroups: RenderBindGroups;
 
-    public constructor(device: GPUDevice, context: GPUCanvasContext, simConfig: SimConfig,simBuffers: SimBuffers, canvasFormat: GPUTextureFormat) {
+    public constructor(device: GPUDevice, context: GPUCanvasContext, sim: Simulation, canvasFormat: GPUTextureFormat) {
         this.device = device;
         this.context = context;
 
-        this.config = simConfig;
+        this.sim = sim;
 
         // GPU buffers, pipelines, and bind groups
-        this.buffers = createRenderBuffers(simBuffers);
+        this.buffers = createRenderBuffers(sim.getBuffers());
         this.pipelines = createRenderPipelines(device, canvasFormat);
         this.bindGroups = createRenderBindGroups(device, this.buffers, this.pipelines);
     }
@@ -46,9 +46,15 @@ export class Renderer implements GPUCommandSource {
 
         renderPass.setPipeline(this.pipelines.render);
         renderPass.setBindGroup(0, this.bindGroups.render);
-        renderPass.draw(6, this.config.numBodies, 0, 0);
+        renderPass.draw(6, this.sim.getNumBodies(), 0, 0);
         renderPass.end();
 
         return commandEncoder.finish();
+    }
+
+    public updateBuffers(sim: Simulation): void {
+        this.buffers = createRenderBuffers(sim.getBuffers());
+        this.pipelines = createRenderPipelines(this.device, this.context.getCurrentTexture().format);
+        this.bindGroups = createRenderBindGroups(this.device, this.buffers, this.pipelines);
     }
 }

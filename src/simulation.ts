@@ -3,11 +3,15 @@ import { createSimBindGroups, type SimBindGroups } from "./bindGroups";
 import { createSimBuffers, type SimBuffers } from "./buffers";
 import { getDefaultSimConfig, type SimConfig } from "./config";
 import { createSimPipelines, type SimPipelines } from "./pipelines";
+import type { Renderer } from "./renderer";
 
 
 export class Simulation implements GPUCommandSource {
     // gpu device
     private readonly device: GPUDevice;
+
+    // renderer instance
+    private renderer?: Renderer;
 
     // immutable config
     private readonly config: SimConfig;
@@ -20,6 +24,9 @@ export class Simulation implements GPUCommandSource {
     // user-controlled body state
     private userBodyPos: [number, number];
     private userBodyMass: number;
+
+    // num bodies
+    private numBodies: number;
 
     // GPU buffers, pipelines, and bind groups
     private buffers: SimBuffers;
@@ -43,10 +50,17 @@ export class Simulation implements GPUCommandSource {
         this.userBodyPos = [0.0, 0.0];
         this.userBodyMass = 0.0;
 
+        // set up num bodies
+        this.numBodies = 50000;
+
         // set up GPU buffers, pipelines, and bind groups
-        this.buffers = createSimBuffers(this.device, this.config, this.camCenter, this.camHalfSize, this.viewPort);
-        this.pipelines = createSimPipelines(this.device, this.config, this.buffers);
+        this.buffers = createSimBuffers(this.device, this.config, this.numBodies, this.camCenter, this.camHalfSize, this.viewPort);
+        this.pipelines = createSimPipelines(this.device, this);
         this.bindGroups = createSimBindGroups(this.device, this.buffers, this.pipelines);
+    }
+
+    public setRenderer(renderer: Renderer): void {
+        this.renderer = renderer;
     }
 
     public getCommands(): GPUCommandBuffer {
@@ -54,7 +68,7 @@ export class Simulation implements GPUCommandSource {
         const computePass = commandEncoder.beginComputePass();
 
         const workgroupSize = 64;
-        const dispatchCount = Math.ceil(this.config.numBodies / workgroupSize);
+        const dispatchCount = Math.ceil(this.numBodies / workgroupSize);
 
         for (let step = 0; step < this.config.substeps; step++) {
             // compute morton codes step
@@ -129,6 +143,20 @@ export class Simulation implements GPUCommandSource {
     }
     public setUserBodyMass(mass: number): void {
         this.userBodyMass = mass;
+    }
+    public getNumBodies(): number {
+        return this.numBodies;
+    }
+    public setNumBodies(numBodies: number): void {
+        this.numBodies = numBodies;
+
+        // recreate buffers, pipelines, and bind groups with new num bodies
+        this.buffers = createSimBuffers(this.device, this.config, this.numBodies, this.camCenter, this.camHalfSize, this.viewPort);
+        this.pipelines = createSimPipelines(this.device, this);
+        this.bindGroups = createSimBindGroups(this.device, this.buffers, this.pipelines);
+
+        // notify renderer of changes
+        this.renderer!.updateBuffers(this);
     }
     
 }

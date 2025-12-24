@@ -15,7 +15,8 @@ async function main() {
     const { device, context, canvasFormat, canvas } = await initDeviceAndContext("webgpu-canvas");
 
     const sim = new Simulation(device, canvas);
-    const renderer = new Renderer(device, context, sim.getConfig(),sim.getBuffers(), canvasFormat);
+    const renderer = new Renderer(device, context, sim, canvasFormat);
+    sim.setRenderer(renderer);
     const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);
 
     let last = performance.now();

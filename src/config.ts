@@ -1,5 +1,4 @@
 export type SimConfig = Readonly<{
-    numBodies: number;
     gravConstant: number;
     bhTheta: number;
     substeps: number;
@@ -9,7 +8,6 @@ export type SimConfig = Readonly<{
 }>;
 
 export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
-    const numBodies = 250000;
     const gravConstant = 1.0;
     const bhTheta = 0.6;
     const substeps = 1;
@@ -18,7 +16,6 @@ export function getDefaultSimConfig(canvas: HTMLCanvasElement): SimConfig {
     const epsilonMultiplier = 1.0;
 
     return {
-        numBodies,
         gravConstant,
         bhTheta,
         substeps,
