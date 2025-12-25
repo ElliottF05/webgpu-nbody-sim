@@ -45,7 +45,7 @@ export class Renderer implements GPUCommandSource {
         });
         densityPass.setPipeline(this.pipelines.density);
         densityPass.setBindGroup(0, this.bindGroups.density);
-        densityPass.draw() // what should the arguments be?
+        densityPass.draw(6, this.sim.getNumBodies(), 0, 0); // check arguments
         densityPass.end();
 
 
