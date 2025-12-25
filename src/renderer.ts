@@ -1,33 +1,196 @@
-import { createRenderBindGroups, type RenderBindGroups } from "./bindGroups";
-import { createRenderBuffers, type RenderBuffers } from "./buffers";
 import type { GPUCommandSource } from "./main";
-import { createRenderPipelines, type RenderPipelines } from "./pipelines";
 import type { Simulation } from "./simulation";
+import densityShaderCode from "./shaders/render/density.wgsl?raw";
+import toneMapShaderCode from "./shaders/render/tone_map.wgsl?raw";
 
+
+type RenderBuffers = {
+    metadataBuffer: GPUBuffer;
+    densityTexture: GPUTexture;
+    densityTextureView: GPUTextureView;
+    densityTextureSampler: GPUSampler;
+}
+
+type RenderPipelines = {
+    density: GPURenderPipeline;
+    toneMap: GPURenderPipeline;
+}
+
+type RenderBindGroups = {
+    density: GPUBindGroup;
+    toneMap: GPUBindGroup;
+};
 
 export class Renderer implements GPUCommandSource {
     // gpu device and canvas context
     private readonly device: GPUDevice;
+    private readonly canvas: HTMLCanvasElement;
     private readonly context: GPUCanvasContext;
+    private readonly canvasFormat: GPUTextureFormat;
 
     // sim instance
     private readonly sim: Simulation;
+
+    // local state
+    private viewPort: [number, number];
+    private camCenter: [number, number];
+    private camHalfSize: [number, number];
 
     // GPU buffers, pipelines, and bind groups
     private buffers: RenderBuffers;
     private pipelines: RenderPipelines;
     private bindGroups: RenderBindGroups;
 
-    public constructor(device: GPUDevice, context: GPUCanvasContext, sim: Simulation, canvasFormat: GPUTextureFormat) {
-        this.device = device;
-        this.context = context;
 
+    // INITIALIZATION
+
+    public constructor(device: GPUDevice, context: GPUCanvasContext, canvasFormat: GPUTextureFormat, sim: Simulation) {
+        this.device = device;
+        this.canvas = context.canvas as HTMLCanvasElement;
+        this.context = context;
+        this.canvasFormat = canvasFormat;
         this.sim = sim;
 
+        this.resizeCanvasToDisplaySize();
+
+        this.viewPort = [context.canvas.width, context.canvas.height];
+        this.camCenter = [0.0, 0.0];
+        this.camHalfSize = [-10.0, 10.0];
+
         // GPU buffers, pipelines, and bind groups
-        this.buffers = createRenderBuffers(device, sim.getBuffers(), sim.getViewPort());
-        this.pipelines = createRenderPipelines(device, canvasFormat);
-        this.bindGroups = createRenderBindGroups(device, this.buffers, this.pipelines);
+        this.buffers = this.createRenderBuffers();
+        this.pipelines = this.createRenderPipelines();
+        this.bindGroups = this.createRenderBindGroups();
+    }
+
+    private createRenderBuffers(): RenderBuffers {
+        const metadataBuffer = this.device.createBuffer({
+            size: 4 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        const densityTexture = this.device.createTexture({
+            size: [this.viewPort[0], this.viewPort[1]],
+            format: "r16float",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        const densityTextureView = densityTexture.createView();
+        const densityTextureSampler = this.device.createSampler({
+            magFilter: "linear",
+            minFilter: "linear",
+        });
+
+        return {
+            metadataBuffer,
+            densityTexture,
+            densityTextureView,
+            densityTextureSampler,
+        }
+    }
+
+    private createRenderPipelines(): RenderPipelines {
+        const densityShaderModule = this.device.createShaderModule({
+            code: densityShaderCode,
+        });
+        const toneMapShaderModule = this.device.createShaderModule({
+            code: toneMapShaderCode,
+        });
+
+        const densityPipeline = this.device.createRenderPipeline({
+            layout: "auto",
+            vertex: {
+                module: densityShaderModule,
+                entryPoint: "vertex_main",
+            },
+            fragment: {
+                module: densityShaderModule,
+                entryPoint: "fragment_main",
+                targets: [{ 
+                    format: "r16float",
+                    writeMask: GPUColorWrite.ALL,
+                    blend: {
+                        color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+                        alpha: { srcFactor: "one", dstFactor: "one", operation: "add", },
+                    }
+                }],
+            },
+            primitive: {
+                topology: "triangle-list",
+            },
+        });
+
+        const toneMapPipeline = this.device.createRenderPipeline({
+            layout: "auto",
+            vertex: {
+                module: toneMapShaderModule,
+                entryPoint: "vertex_main",
+            },
+            fragment: {
+                module: toneMapShaderModule,
+                entryPoint: "fragment_main",
+                targets: [{ 
+                    format: this.canvasFormat,
+                    blend: {
+                        color: { srcFactor: "src-alpha", dstFactor: "one", operation: "add" },
+                        alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add", },
+                    },
+                    writeMask: GPUColorWrite.ALL,
+                }],
+            },
+            primitive: {
+                topology: "triangle-list",
+            },
+        });
+
+        return {
+            density: densityPipeline,
+            toneMap: toneMapPipeline,
+        };
+    }
+
+    private createRenderBindGroups(): RenderBindGroups {
+        const density = this.device.createBindGroup({
+            layout: this.pipelines.density.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.buffers.metadataBuffer },
+                { binding: 1, resource: this.sim.getBuffers().pos },
+            ],
+        });
+
+        // adjust these as needed too
+        const toneMap = this.device.createBindGroup({
+            layout: this.pipelines.toneMap.getBindGroupLayout(0),
+            entries: [
+                // { binding: 0, resource: this.buffers.metadataBuffer }, not needed for now
+                { binding: 1, resource: this.buffers.densityTextureView },
+                { binding: 2, resource: this.buffers.densityTextureSampler },
+            ],
+        });
+
+        return {
+            density,
+            toneMap,
+        };
+    }
+
+    private resizeCanvasToDisplaySize() {
+        const dpr = window.devicePixelRatio || 1;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const displayWidth = Math.max(1, Math.round(rect.width * dpr));
+        const displayHeight = Math.max(1, Math.round(rect.height * dpr));
+
+        if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+            this.canvas.width = displayWidth;
+            this.canvas.height = displayHeight;
+
+            this.context.configure({
+                device: this.device,
+                format: this.canvasFormat,
+                alphaMode: "premultiplied",
+            });
+        }
+
+        return { displayWidth, displayHeight, dpr };
     }
 
     public getCommands(): GPUCommandBuffer {
@@ -66,11 +229,5 @@ export class Renderer implements GPUCommandSource {
         renderPass.end();
 
         return commandEncoder.finish();
-    }
-
-    public updateBuffers(sim: Simulation): void {
-        this.buffers = createRenderBuffers(this.device, sim.getBuffers(), sim.getViewPort());
-        this.pipelines = createRenderPipelines(this.device, this.context.getCurrentTexture().format);
-        this.bindGroups = createRenderBindGroups(this.device, this.buffers, this.pipelines);
     }
 }

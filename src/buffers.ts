@@ -1,4 +1,4 @@
-import type { SimConfig } from "./config";
+import type { Config } from "./config";
 
 
 // HELPER FUNCTIONS
@@ -52,7 +52,7 @@ export type SimBuffers = {
     nodeStatus: GPUBuffer;
 };
 
-export function createSimBuffers(device: GPUDevice, config: SimConfig, numBodies: number, camCenter: [number, number], camHalfSize: [number, number], viewPort: [number, number]): SimBuffers {
+export function createSimBuffers(device: GPUDevice, config: Config, numBodies: number, camCenter: [number, number], camHalfSize: [number, number], viewPort: [number, number]): SimBuffers {
     // metadata buffers
     const { uintMetadataArray, floatMetadataArray } = buildMetadataArrays(config, numBodies, camCenter, camHalfSize, viewPort);
     const uintMetadataBuffer = createMetadataBuffer(device, uintMetadataArray);
@@ -134,7 +134,7 @@ export function createSimBuffers(device: GPUDevice, config: SimConfig, numBodies
     };
 }
 
-export function buildMetadataArrays(config: SimConfig, numBodies: number, camCenter: [number, number], camHalfSize: [number, number], viewPort: [number, number]): { uintMetadataArray: Uint32Array; floatMetadataArray: Float32Array } {
+export function buildMetadataArrays(config: Config, numBodies: number, camCenter: [number, number], camHalfSize: [number, number], viewPort: [number, number]): { uintMetadataArray: Uint32Array; floatMetadataArray: Float32Array } {
     const uintMetadataArray = new Uint32Array([numBodies]);
     const floatMetadataArray = new Float32Array([config.gravConstant, config.deltaTime, config.epsilonMultiplier, config.bhTheta, ...camCenter, ...camHalfSize, ...viewPort]);
     return { uintMetadataArray, floatMetadataArray };

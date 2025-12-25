@@ -1,7 +1,7 @@
 import lbvhShaderCode from "./shaders/compute/lbvh.wgsl?raw";
 import barnesHutShaderCode from "./shaders/compute/barnes_hut.wgsl?raw";
 import densityShaderCode from "./shaders/render/density.wgsl?raw";
-import toneMapShaderCode from "./shaders/render/tonemap.wgsl?raw";
+import toneMapShaderCode from "./shaders/render/tone_map.wgsl?raw";
 // @ts-ignore
 import { RadixSortKernel } from 'webgpu-radix-sort';
 import type { Simulation } from "./simulation";

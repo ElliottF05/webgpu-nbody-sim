@@ -1,5 +1,6 @@
 // import { readBufferData } from "./buffers";
-import { initDeviceAndContext } from "./gpu";
+import { getDefaultConfig } from "./config";
+import { initDeviceAndContext } from "./gpuSetup";
 import { InteractionController } from "./interaction";
 import { Renderer } from "./renderer";
 import { Simulation } from "./simulation";
@@ -12,12 +13,13 @@ export interface GPUCommandSource {
 }
 
 async function main() {
+    const config = getDefaultConfig();
     const { device, context, canvasFormat, canvas } = await initDeviceAndContext("webgpu-canvas");
 
-    const sim = new Simulation(device, canvas);
-    const renderer = new Renderer(device, context, sim, canvasFormat);
+    const sim = new Simulation(config, device);
+    const renderer = new Renderer(device, context, canvasFormat, sim);
     sim.setRenderer(renderer);
-    const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);
+    // const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);
 
     let last = performance.now();
     function frame() {
@@ -29,7 +31,7 @@ async function main() {
         }
         last = now;
 
-        interaction.sendUpdateToGPU();
+        // interaction.sendUpdateToGPU();
         device.queue.submit([
             sim.getCommands(),
             renderer.getCommands(),
