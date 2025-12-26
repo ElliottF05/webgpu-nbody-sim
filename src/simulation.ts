@@ -271,15 +271,28 @@ export class Simulation implements GPUCommandSource {
         const velData = new Float32Array(this.numBodies * 2);
 
         if (scenario === "default") {
-            // simple random distribution
+            // 2d gaussian distribution
+            const radius = 5.0;
+            const speedFactor = 0.1;
             for (let i = 0; i < this.numBodies; i++) {
-                massData[i] = Math.random() * 5.0 + 1.0; // mass between 1 and 6
+                // mass
+                massData[i] = 1.0;
 
-                posData[2 * i] = (Math.random() - 0.5) * 20.0; // x position
-                posData[2 * i + 1] = (Math.random() - 0.5) * 20.0; // y position
+                // position
+                const angle = Math.random() * 2.0 * Math.PI;
+                const r = radius * Math.sqrt(Math.random());
+                const x = r * Math.cos(angle);
+                const y = r * Math.sin(angle);
+                posData[i * 2 + 0] = x;
+                posData[i * 2 + 1] = y;
 
-                velData[2 * i] = (Math.random() - 0.5) * 1.0; // x velocity
-                velData[2 * i + 1] = (Math.random() - 0.5) * 1.0; // y velocity
+                // velocity (circular orbit)
+                const dist = Math.sqrt(x * x + y * y);
+                const speed = speedFactor * Math.sqrt(this.config.gravConstant * this.numBodies / dist);
+                const vx = -speed * (y / dist);
+                const vy = speed * (x / dist);
+                velData[i * 2 + 0] = vx;
+                velData[i * 2 + 1] = vy;
             }
         }
 
