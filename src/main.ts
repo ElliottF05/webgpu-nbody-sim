@@ -18,8 +18,7 @@ async function main() {
 
     const sim = new Simulation(config, device);
     const renderer = new Renderer(device, canvas, context, canvasFormat, sim);
-    // sim.setRenderer(renderer); might not need this
-    // const interaction = new InteractionController(device, canvasFormat, canvas, context, sim);
+    const interaction = new InteractionController(canvas, sim, renderer);
 
     let last = performance.now();
     function frame() {

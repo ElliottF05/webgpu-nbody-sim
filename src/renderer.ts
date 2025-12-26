@@ -51,8 +51,6 @@ export class Renderer implements GPUCommandSource {
         this.canvasFormat = canvasFormat;
         this.sim = sim;
 
-        this.resizeCanvasToDisplaySize();
-
         this.viewPort = [context.canvas.width, context.canvas.height];
         this.camCenter = [0.0, 0.0];
         this.camHalfSize = [-10.0, 10.0];
@@ -61,6 +59,9 @@ export class Renderer implements GPUCommandSource {
         this.buffers = this.createRenderBuffers();
         this.pipelines = this.createRenderPipelines();
         this.bindGroups = this.createRenderBindGroups();
+
+        // initial resize
+        this.resizeCanvasToDisplaySize();
 
         // fill buffers with initial data
         this.updateMetadataBuffer();
@@ -190,7 +191,27 @@ export class Renderer implements GPUCommandSource {
         this.device.queue.writeBuffer(this.buffers.metadataBuffer, 0, metadataArray);
     }
 
-    private resizeCanvasToDisplaySize() {
+    private updateDensityTexture() {
+        // recreate density texture with new size
+        this.buffers.densityTexture.destroy();
+        this.buffers.densityTexture = this.device.createTexture({
+            size: [this.viewPort[0], this.viewPort[1]],
+            format: "r16float",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.buffers.densityTextureView = this.buffers.densityTexture.createView();
+
+        // recreate tone map bind group with new texture view
+        this.bindGroups.toneMap = this.device.createBindGroup({
+            layout: this.pipelines.toneMap.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.buffers.densityTextureView },
+                { binding: 1, resource: this.buffers.densityTextureSampler },
+            ],
+        });
+    }
+
+    public resizeCanvasToDisplaySize() {
         const dpr = window.devicePixelRatio || 1;
 
         const rect = this.canvas.getBoundingClientRect();
@@ -208,7 +229,54 @@ export class Renderer implements GPUCommandSource {
             });
         }
 
-        return { displayWidth, displayHeight, dpr };
+        // update viewport and cam aspect ratio
+        this.viewPort = [displayWidth, displayHeight];
+        const aspect = displayWidth / displayHeight;
+        this.camHalfSize[0] = this.camHalfSize[1] * aspect;
+        this.updateMetadataBuffer();
+
+        // resize density texture
+        this.updateDensityTexture();
+    }
+
+    private deltaPxToDeltaWorld(deltaPx: number, deltaPy: number): [number, number] {
+        const deltaNdcX = (2.0 * deltaPx) / this.viewPort[0];
+        const deltaNdcY = (2.0 * deltaPy) / this.viewPort[1];
+
+        const deltaWorldX = deltaNdcX * this.camHalfSize[0];
+        const deltaWorldY = deltaNdcY * this.camHalfSize[1];
+
+        return [deltaWorldX, deltaWorldY];
+    }
+
+    private pxToWorld(px: number, py: number): [number, number] {
+        const ndcX = (2.0 * px) / this.viewPort[0] - 1.0;
+        const ndcY = (2.0 * py) / this.viewPort[1] - 1.0;
+
+        const worldX = this.camCenter[0] + ndcX * this.camHalfSize[0];
+        const worldY = this.camCenter[1] + ndcY * this.camHalfSize[1];
+
+        return [worldX, worldY];
+    }
+
+    public panCamera(deltaPx: number, deltaPy: number) {
+        const [deltaWorldX, deltaWorldY] = this.deltaPxToDeltaWorld(deltaPx, deltaPy);
+        this.camCenter[0] -= deltaWorldX;
+        this.camCenter[1] -= deltaWorldY;
+        this.updateMetadataBuffer();
+    }
+
+    public zoomCamera(zoomFactor: number, zoomCenterX: number, zoomCenterY: number) {
+        const [worldZoomCenterX, worldZoomCenterY] = this.pxToWorld(zoomCenterX, zoomCenterY);
+
+        this.camHalfSize[0] *= zoomFactor;
+        this.camHalfSize[1] *= zoomFactor;
+
+        // adjust cam center to zoom towards zoom center
+        this.camCenter[0] = worldZoomCenterX + (this.camCenter[0] - worldZoomCenterX) * zoomFactor;
+        this.camCenter[1] = worldZoomCenterY + (this.camCenter[1] - worldZoomCenterY) * zoomFactor;
+
+        this.updateMetadataBuffer();
     }
 
     public getCommands(): GPUCommandBuffer {
