@@ -5,6 +5,7 @@ import barnesHutShaderCode from "./shaders/compute/barnes_hut.wgsl?raw";
 
 // @ts-ignore
 import { RadixSortKernel } from "webgpu-radix-sort";
+import type { Renderer } from "./renderer";
 
 
 type SimBuffers = {
@@ -44,11 +45,18 @@ export class Simulation implements GPUCommandSource {
     // gpu device
     private readonly device: GPUDevice;
 
+    // renderer instance
+    private renderer?: Renderer;
+
     // current scenario
     private currentScenario: SimScenario;
 
     // num bodies
     private numBodies: number;
+
+    // user body parameters
+    private userBodyPos: [number, number];
+    private userBodyMass: number;
 
     // GPU buffers, pipelines, and bind groups
     private buffers: SimBuffers;
@@ -66,6 +74,10 @@ export class Simulation implements GPUCommandSource {
 
         // set up num bodies
         this.numBodies = 50000;
+
+        // set up user body params
+        this.userBodyPos = [0.0, 0.0];
+        this.userBodyMass = 0.0;
 
         // set up GPU buffers, pipelines, and bind groups
         this.buffers = this.createSimBuffers();
@@ -219,16 +231,23 @@ export class Simulation implements GPUCommandSource {
         };
     }
 
+    public setRenderer(renderer: Renderer) {
+        this.renderer = renderer;
+    }
+
     public updateMetadataBuffer() {
         const metadataArray = new ArrayBuffer(8 * 4);
         const metadataFloatView = new Float32Array(metadataArray);
         const metadataUintView = new Uint32Array(metadataArray);
 
-        metadataUintView[0] = this.numBodies;
-        metadataFloatView[1] = this.config.gravConstant;
-        metadataFloatView[2] = this.config.deltaTime;
-        metadataFloatView[3] = this.config.epsilonMultiplier;
-        metadataFloatView[4] = this.config.bhTheta;
+        metadataFloatView[0] = this.userBodyPos[0];
+        metadataFloatView[1] = this.userBodyPos[1];
+        metadataFloatView[2] = this.userBodyMass;
+        metadataUintView[3] = this.numBodies;
+        metadataFloatView[4] = this.config.gravConstant;
+        metadataFloatView[5] = this.config.deltaTime;
+        metadataFloatView[6] = this.config.epsilonMultiplier;
+        metadataFloatView[7] = this.config.bhTheta;
 
         this.device.queue.writeBuffer(this.buffers.metadata, 0, metadataArray);
     }
@@ -249,11 +268,12 @@ export class Simulation implements GPUCommandSource {
     public setScenario(scenario: SimScenario) {
         // for now, only default scenario
         this.currentScenario = scenario;
-        if (scenario === "default") {
-            const massData = new Float32Array(this.numBodies);
-            const posData = new Float32Array(this.numBodies * 2);
-            const velData = new Float32Array(this.numBodies * 2);
 
+        const massData = new Float32Array(this.numBodies);
+        const posData = new Float32Array(this.numBodies * 2);
+        const velData = new Float32Array(this.numBodies * 2);
+
+        if (scenario === "default") {
             // simple random distribution
             for (let i = 0; i < this.numBodies; i++) {
                 massData[i] = Math.random() * 5.0 + 1.0; // mass between 1 and 6
@@ -264,8 +284,15 @@ export class Simulation implements GPUCommandSource {
                 velData[2 * i] = (Math.random() - 0.5) * 1.0; // x velocity
                 velData[2 * i + 1] = (Math.random() - 0.5) * 1.0; // y velocity
             }
-            this.updatePhysicsBuffers(massData, posData, velData);
         }
+
+        this.buffers = this.createSimBuffers();
+        this.pipelines = this.createSimPipelines();
+        this.bindGroups = this.createSimBindGroups();
+
+        this.updateMetadataBuffer();
+        this.updatePhysicsBuffers(massData, posData, velData);
+        this.renderer?.rebindPosBuffer();
     }
 
     private updatePhysicsBuffers(massData: Float32Array, posData: Float32Array, velData: Float32Array) {
@@ -320,5 +347,17 @@ export class Simulation implements GPUCommandSource {
     }
     public getNumBodies(): number {
         return this.numBodies;
+    }
+    public getUserBodyPos(): [number, number] {
+        return this.userBodyPos;
+    }
+    public setUserBodyPos(worldX: number, worldY: number) {
+        this.userBodyPos = [worldX, worldY];
+        this.updateMetadataBuffer();
+        this.renderer?.updateMetadataBuffer();
+    }
+    public setUserBodyMass(mass: number) {
+        this.userBodyMass = mass;
+        this.updateMetadataBuffer();
     }
 }

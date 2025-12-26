@@ -4,6 +4,7 @@ struct Metadata {
     cam_center: vec2<f32>,
     cam_half_size: vec2<f32>,
     viewport: vec2<f32>,
+    user_body_pos: vec2<f32>,
     num_bodies: u32,
     _pad0: f32,
 }
@@ -58,10 +59,6 @@ fn vertex_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u3
     let center_ndc = world_to_ndc(world_pos);
 
     var radius_px = 2.0;
-    if iid == 0u {
-        radius_px = 5.0; // make user-controlled body larger
-    }
-
     let px_to_ndc = 2.0 / metadata.viewport;
     let radius_ndc = radius_px * px_to_ndc;
 

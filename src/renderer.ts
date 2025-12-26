@@ -69,7 +69,7 @@ export class Renderer implements GPUCommandSource {
 
     private createRenderBuffers(): RenderBuffers {
         const metadataBuffer = this.device.createBuffer({
-            size: 8 * 4,
+            size: 16 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         const densityTexture = this.device.createTexture({
@@ -175,8 +175,8 @@ export class Renderer implements GPUCommandSource {
         };
     }
 
-    private updateMetadataBuffer() {
-        const metadataArray = new ArrayBuffer(8 * 4);
+    public updateMetadataBuffer() {
+        const metadataArray = new ArrayBuffer(16 * 4);
         const floatView = new Float32Array(metadataArray);
         const uintView = new Uint32Array(metadataArray);
         
@@ -186,7 +186,9 @@ export class Renderer implements GPUCommandSource {
         floatView[3] = this.camHalfSize[1];
         floatView[4] = this.viewPort[0];
         floatView[5] = this.viewPort[1];
-        uintView[6] = this.sim.getNumBodies();
+        floatView[6] = this.sim.getUserBodyPos()[0];;
+        floatView[7] = this.sim.getUserBodyPos()[1];
+        uintView[8] = this.sim.getNumBodies();
 
         this.device.queue.writeBuffer(this.buffers.metadataBuffer, 0, metadataArray);
     }
@@ -207,6 +209,17 @@ export class Renderer implements GPUCommandSource {
             entries: [
                 { binding: 0, resource: this.buffers.densityTextureView },
                 { binding: 1, resource: this.buffers.densityTextureSampler },
+            ],
+        });
+    }
+
+    public rebindPosBuffer() {
+        // recreate density bind group with new position buffer
+        this.bindGroups.density = this.device.createBindGroup({
+            layout: this.pipelines.density.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.buffers.metadataBuffer } },
+                { binding: 1, resource: { buffer: this.sim.getBuffers().pos } },
             ],
         });
     }
@@ -239,7 +252,7 @@ export class Renderer implements GPUCommandSource {
         this.updateDensityTexture();
     }
 
-    private deltaPxToDeltaWorld(deltaPx: number, deltaPy: number): [number, number] {
+    public deltaPxToDeltaWorld(deltaPx: number, deltaPy: number): [number, number] {
         const deltaNdcX = (2.0 * deltaPx) / this.viewPort[0];
         const deltaNdcY = (2.0 * deltaPy) / this.viewPort[1];
 
@@ -249,7 +262,7 @@ export class Renderer implements GPUCommandSource {
         return [deltaWorldX, deltaWorldY];
     }
 
-    private pxToWorld(px: number, py: number): [number, number] {
+    public canvasPxToWorld(px: number, py: number): [number, number] {
         const ndcX = (2.0 * px) / this.viewPort[0] - 1.0;
         const ndcY = (2.0 * py) / this.viewPort[1] - 1.0;
 
@@ -267,7 +280,7 @@ export class Renderer implements GPUCommandSource {
     }
 
     public zoomCamera(zoomFactor: number, zoomCenterX: number, zoomCenterY: number) {
-        const [worldZoomCenterX, worldZoomCenterY] = this.pxToWorld(zoomCenterX, zoomCenterY);
+        const [worldZoomCenterX, worldZoomCenterY] = this.canvasPxToWorld(zoomCenterX, zoomCenterY);
 
         this.camHalfSize[0] *= zoomFactor;
         this.camHalfSize[1] *= zoomFactor;

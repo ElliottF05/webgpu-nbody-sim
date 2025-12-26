@@ -21,8 +21,8 @@ export class InteractionController {
         this.addScrollListener();
         this.addDragListener();
         this.addResizeListener();
-        // this.addUserMassListeners();
-        // this.addNumBodiesListeners();
+        this.addUserMassListeners();
+        this.addNumBodiesListeners();
     }
 
     private clientToCanvasCoords(clientX: number, clientY: number): [number, number] {
@@ -65,7 +65,12 @@ export class InteractionController {
             const deltaY = canvasY - this.lastMouseCanvasPos[1];
             this.lastMouseCanvasPos = [canvasX, canvasY];
 
-            this.renderer.panCamera(deltaX, deltaY);
+            if (this.interactionMode === "camera") {
+                this.renderer.panCamera(deltaX, deltaY);
+            } else {
+                const [worldX, worldY] = this.renderer.canvasPxToWorld(canvasX, canvasY);
+                this.sim.setUserBodyPos(worldX, worldY);
+            }
         });
 
         const endPan = (e: PointerEvent) => {
@@ -89,7 +94,13 @@ export class InteractionController {
         modeRadios.forEach(radio => {
             radio.addEventListener("change", (_e) => {
                 if (radio.checked) {
-                    this.interactionMode = radio.value as "camera" | "body";
+                    if (radio.value === "camera") {
+                        this.interactionMode = "camera";
+                        this.sim.setUserBodyMass(0.0);
+                    } else {
+                        this.interactionMode = "body";
+                        this.sim.setUserBodyMass(this.userBodySliderValue);
+                    }
                 }
             });
         });
@@ -103,6 +114,9 @@ export class InteractionController {
             const value = Math.sinh(a * sliderVal) / Math.sinh(a) * 100_000;
             massValue.textContent = value.toFixed(1);
             this.userBodySliderValue = value;
+            if (this.interactionMode === "body") {
+                this.sim.setUserBodyMass(this.userBodySliderValue);
+            }
         });
 
         window.addEventListener("keydown", (e) => {
@@ -110,9 +124,19 @@ export class InteractionController {
                 if (this.interactionMode === "body") {
                     this.interactionMode = "camera";
                     this.sim.setUserBodyMass(0.0);
+                    modeRadios.forEach(radio => {
+                        if (radio.value === "camera") {
+                            radio.checked = true;
+                        }
+                    });
                 } else {
                     this.interactionMode = "body";
                     this.sim.setUserBodyMass(this.userBodySliderValue);
+                    modeRadios.forEach(radio => {
+                        if (radio.value === "body") {
+                            radio.checked = true;
+                        }
+                    });
                 }
             }
         });

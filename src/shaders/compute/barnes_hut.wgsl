@@ -1,12 +1,13 @@
 // STRUCTS
 
 struct Metadata {
+    user_body_pos: vec2<f32>,
+    user_body_mass: f32,
     num_bodies: u32,
     grav_constant: f32,
     delta_time: f32,
     epsilon_multiplier: f32,
     bh_theta: f32,
-    _pad: f32,
 }
 
 struct NodeData {
@@ -106,6 +107,17 @@ fn bh_vel_step_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
 
+    // add user body influence
+    let pos2 = metadata.user_body_pos;
+    let m2 = metadata.user_body_mass;
+    let r = pos2 - pos1;
+    let dist_squared = dot(r, r);
+    let m_eff = max(m1, m2);
+    let eps = metadata.epsilon_multiplier * sqrt(g * m_eff * dt);
+    let inv_denom = inverseSqrt(dist_squared + eps * eps);
+    let inv_denom_3 = inv_denom * inv_denom * inv_denom;
+    accel += g * m2 * r * inv_denom_3;
+    
     // update velocity
     vel_buf[body_idx] = vel_buf[body_idx] + accel * dt;
 }
