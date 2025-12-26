@@ -56,7 +56,7 @@ export class Renderer implements GPUCommandSource {
 
         this.viewPort = [context.canvas.width, context.canvas.height];
         this.camCenter = [0.0, 0.0];
-        this.camHalfSize = [-10.0, 10.0];
+        this.camHalfSize = [10.0, 10.0];
 
         // GPU buffers, pipelines, and bind groups
         this.buffers = this.createRenderBuffers();
@@ -223,7 +223,7 @@ export class Renderer implements GPUCommandSource {
         floatView[3] = this.camHalfSize[1];
         floatView[4] = this.viewPort[0];
         floatView[5] = this.viewPort[1];
-        floatView[6] = this.sim.getUserBodyPos()[0];;
+        floatView[6] = this.sim.getUserBodyPos()[0];
         floatView[7] = this.sim.getUserBodyPos()[1];
         floatView[8] = this.sim.getUserBodyMass();
         uintView[9] = this.sim.getNumBodies();
@@ -324,8 +324,8 @@ export class Renderer implements GPUCommandSource {
         this.camHalfSize[1] *= zoomFactor;
 
         // adjust cam center to zoom towards zoom center
-        this.camCenter[0] = worldZoomCenterX + (this.camCenter[0] - worldZoomCenterX) * zoomFactor;
-        this.camCenter[1] = worldZoomCenterY + (this.camCenter[1] - worldZoomCenterY) * zoomFactor;
+        this.camCenter[0] = this.camCenter[0] + (worldZoomCenterX - this.camCenter[0]) * (1.0 - zoomFactor);
+        this.camCenter[1] = this.camCenter[1] + (worldZoomCenterY - this.camCenter[1]) * (1.0 - zoomFactor);
 
         this.updateMetadataBuffer();
     }
@@ -350,7 +350,7 @@ export class Renderer implements GPUCommandSource {
 
 
         // second pass: render to screen from density texture
-        const renderPass = commandEncoder.beginRenderPass({
+        const toneMapPass = commandEncoder.beginRenderPass({
             colorAttachments: [
             {
                 view: canvasTextureView,
@@ -360,10 +360,10 @@ export class Renderer implements GPUCommandSource {
             },
             ],
         });
-        renderPass.setPipeline(this.pipelines.toneMap);
-        renderPass.setBindGroup(0, this.bindGroups.toneMap);
-        renderPass.draw(3, 1, 0, 0);
-        renderPass.end();
+        toneMapPass.setPipeline(this.pipelines.toneMap);
+        toneMapPass.setBindGroup(0, this.bindGroups.toneMap);
+        toneMapPass.draw(3, 1, 0, 0);
+        toneMapPass.end();
 
         // third pass: render user body
         const userBodyPass = commandEncoder.beginRenderPass({

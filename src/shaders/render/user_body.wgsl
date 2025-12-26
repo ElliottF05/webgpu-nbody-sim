@@ -25,8 +25,9 @@ struct VSOut {
 // HELPER FUNCTIONS
 
 fn world_to_ndc(p: vec2<f32>) -> vec2<f32> {
-    // maps to [-1,1]
-    return (p - metadata.cam_center) / metadata.cam_half_size;
+    var ndc = (p - metadata.cam_center) / metadata.cam_half_size;
+    ndc.y = -ndc.y; // y axis has to be flipped for some reason?
+    return ndc;
 }
 
 

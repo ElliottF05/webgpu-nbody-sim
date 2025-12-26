@@ -53,6 +53,8 @@ export class InteractionController {
             }
             this.isMouseDown = true;
             this.lastMouseCanvasPos = this.clientToCanvasCoords(e.clientX, e.clientY);
+            console.log("Pointer down at ", this.lastMouseCanvasPos[0], this.lastMouseCanvasPos[1]);
+            console.log("World pos: ", this.renderer.canvasPxToWorld(this.lastMouseCanvasPos[0], this.lastMouseCanvasPos[1]));
             this.canvas.setPointerCapture(e.pointerId);
         });
 
@@ -70,6 +72,7 @@ export class InteractionController {
             } else {
                 const [worldX, worldY] = this.renderer.canvasPxToWorld(canvasX, canvasY);
                 this.sim.setUserBodyPos(worldX, worldY);
+                this.renderer.updateMetadataBuffer();
             }
         });
 
