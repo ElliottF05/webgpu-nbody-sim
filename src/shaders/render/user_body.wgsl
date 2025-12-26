@@ -21,9 +21,6 @@ struct VSOut {
 // metadata buffers
 @group(0) @binding(0) var<uniform> metadata: Metadata;
 
-// data buffers
-@group(0) @binding(1) var<storage, read> pos: array<vec2<f32>>;
-
 
 // HELPER FUNCTIONS
 
@@ -48,17 +45,10 @@ fn vertex_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u3
 
     var out: VSOut;
 
-    if iid >= metadata.num_bodies {
-        out.pos = vec4<f32>(2.0, 2.0, 0.0, 1.0); // offscreen
-        out.uv = vec2<f32>(0.0);
-        out.radius_px = 0.0;
-        return out;
-    }
-
-    let world_pos = pos[iid];
+    let world_pos = metadata.user_body_pos;
     let center_ndc = world_to_ndc(world_pos);
 
-    var radius_px = 2.0;
+    var radius_px = 8.0;
     let px_to_ndc = 2.0 / metadata.viewport;
     let radius_ndc = radius_px * px_to_ndc;
 
@@ -79,16 +69,7 @@ fn fragment_main(in: VSOut) -> @location(0) vec4<f32> {
         discard;
     }
 
-    let k = 4.0; // higher = sharper
-    let w = exp(-k * r * r);
+    let color = vec3<f32>(0.95, 0.25, 0.25);
 
-    // compensate for zoom by reducing per-pixel contribution when zoomed out
-    let zoom = max(metadata.cam_half_size.x, metadata.cam_half_size.y);
-    let zoom_scale = 1.0 / (1.0 + 0.05 * zoom); // tweak 0.05 to adjust falloff speed
-
-    let base = 0.02; // change this to adjust overall brightness
-
-    let density = base * w * zoom_scale;
-
-    return vec4<f32>(density, 0.0, 0.0, 1.0);
+    return vec4<f32>(color, 1.0);
 }

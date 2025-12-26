@@ -2,6 +2,7 @@ import type { GPUCommandSource } from "./main";
 import type { Simulation } from "./simulation";
 import densityShaderCode from "./shaders/render/density.wgsl?raw";
 import toneMapShaderCode from "./shaders/render/tone_map.wgsl?raw";
+import userBodyShaderCode from "./shaders/render/user_body.wgsl?raw";
 
 
 type RenderBuffers = {
@@ -14,11 +15,13 @@ type RenderBuffers = {
 type RenderPipelines = {
     density: GPURenderPipeline;
     toneMap: GPURenderPipeline;
+    userBody: GPURenderPipeline;
 }
 
 type RenderBindGroups = {
     density: GPUBindGroup;
     toneMap: GPUBindGroup;
+    userBody: GPUBindGroup;
 };
 
 export class Renderer implements GPUCommandSource {
@@ -98,6 +101,9 @@ export class Renderer implements GPUCommandSource {
         const toneMapShaderModule = this.device.createShaderModule({
             code: toneMapShaderCode,
         });
+        const userBodyShaderModule = this.device.createShaderModule({
+            code: userBodyShaderCode,
+        });
 
         const densityPipeline = this.device.createRenderPipeline({
             layout: "auto",
@@ -145,9 +151,33 @@ export class Renderer implements GPUCommandSource {
             },
         });
 
+        const userBodyPipeline = this.device.createRenderPipeline({
+            layout: "auto",
+            vertex: {
+                module: userBodyShaderModule,
+                entryPoint: "vertex_main",
+            },
+            fragment: {
+                module: userBodyShaderModule,
+                entryPoint: "fragment_main",
+                targets: [{ 
+                    format: this.canvasFormat,
+                    writeMask: GPUColorWrite.ALL,
+                    blend: {
+                        color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+                        alpha: { srcFactor: "one", dstFactor: "one", operation: "add", },
+                    }
+                }],
+            },
+            primitive: {
+                topology: "triangle-list",
+            },
+        });
+
         return {
             density: densityPipeline,
             toneMap: toneMapPipeline,
+            userBody: userBodyPipeline,
         };
     }
 
@@ -160,7 +190,6 @@ export class Renderer implements GPUCommandSource {
             ],
         });
 
-        // adjust these as needed too
         const toneMap = this.device.createBindGroup({
             layout: this.pipelines.toneMap.getBindGroupLayout(0),
             entries: [
@@ -169,9 +198,17 @@ export class Renderer implements GPUCommandSource {
             ],
         });
 
+        const userBody = this.device.createBindGroup({
+            layout: this.pipelines.userBody.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.buffers.metadataBuffer } },
+            ],
+        });
+
         return {
             density,
             toneMap,
+            userBody,
         };
     }
 
@@ -188,7 +225,8 @@ export class Renderer implements GPUCommandSource {
         floatView[5] = this.viewPort[1];
         floatView[6] = this.sim.getUserBodyPos()[0];;
         floatView[7] = this.sim.getUserBodyPos()[1];
-        uintView[8] = this.sim.getNumBodies();
+        floatView[8] = this.sim.getUserBodyMass();
+        uintView[9] = this.sim.getNumBodies();
 
         this.device.queue.writeBuffer(this.buffers.metadataBuffer, 0, metadataArray);
     }
@@ -326,6 +364,19 @@ export class Renderer implements GPUCommandSource {
         renderPass.setBindGroup(0, this.bindGroups.toneMap);
         renderPass.draw(3, 1, 0, 0);
         renderPass.end();
+
+        // third pass: render user body
+        const userBodyPass = commandEncoder.beginRenderPass({
+            colorAttachments: [{
+                view: canvasTextureView,
+                loadOp: "load",
+                storeOp: "store",
+            }],
+        });
+        userBodyPass.setPipeline(this.pipelines.userBody);
+        userBodyPass.setBindGroup(0, this.bindGroups.userBody);
+        userBodyPass.draw(6, 1, 0, 0);
+        userBodyPass.end();
 
         return commandEncoder.finish();
     }

@@ -356,6 +356,9 @@ export class Simulation implements GPUCommandSource {
         this.updateMetadataBuffer();
         this.renderer?.updateMetadataBuffer();
     }
+    public getUserBodyMass(): number {
+        return this.userBodyMass;
+    }
     public setUserBodyMass(mass: number) {
         this.userBodyMass = mass;
         this.updateMetadataBuffer();
