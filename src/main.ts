@@ -38,7 +38,7 @@ async function main() {
         ]);
 
         device.queue.onSubmittedWorkDone().then(() => {
-            // console.log(`Frame time: ${(performance.now() - now).toFixed(2)} ms`);
+            console.log(`Frame time: ${(performance.now() - now).toFixed(2)} ms`);
         });
     }
 

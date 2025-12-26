@@ -7,8 +7,6 @@ export class InteractionController {
     private readonly sim: Simulation;
     private readonly renderer: Renderer;
 
-    private interactionMode: "camera" | "body" = "camera";
-    private userBodySliderValue: number = 0.0;
     private isMouseDown: boolean = false;
     private lastMouseCanvasPos: [number, number] = [0, 0];
     
@@ -21,7 +19,6 @@ export class InteractionController {
         this.addScrollListener();
         this.addDragListener();
         this.addResizeListener();
-        this.addUserMassListeners();
         this.addNumBodiesListeners();
     }
 
@@ -53,8 +50,6 @@ export class InteractionController {
             }
             this.isMouseDown = true;
             this.lastMouseCanvasPos = this.clientToCanvasCoords(e.clientX, e.clientY);
-            console.log("Pointer down at ", this.lastMouseCanvasPos[0], this.lastMouseCanvasPos[1]);
-            console.log("World pos: ", this.renderer.canvasPxToWorld(this.lastMouseCanvasPos[0], this.lastMouseCanvasPos[1]));
             this.canvas.setPointerCapture(e.pointerId);
         });
 
@@ -67,13 +62,7 @@ export class InteractionController {
             const deltaY = canvasY - this.lastMouseCanvasPos[1];
             this.lastMouseCanvasPos = [canvasX, canvasY];
 
-            if (this.interactionMode === "camera") {
-                this.renderer.panCamera(deltaX, deltaY);
-            } else {
-                const [worldX, worldY] = this.renderer.canvasPxToWorld(canvasX, canvasY);
-                this.sim.setUserBodyPos(worldX, worldY);
-                this.renderer.updateMetadataBuffer();
-            }
+            this.renderer.panCamera(deltaX, deltaY);
         });
 
         const endPan = (e: PointerEvent) => {
@@ -92,59 +81,6 @@ export class InteractionController {
         this.canvas.addEventListener("pointercancel", endPan);
     }
 
-    private addUserMassListeners() {
-        const modeRadios = document.getElementsByName("mode") as NodeListOf<HTMLInputElement>;
-        modeRadios.forEach(radio => {
-            radio.addEventListener("change", (_e) => {
-                if (radio.checked) {
-                    if (radio.value === "camera") {
-                        this.interactionMode = "camera";
-                        this.sim.setUserBodyMass(0.0);
-                    } else {
-                        this.interactionMode = "body";
-                        this.sim.setUserBodyMass(this.userBodySliderValue);
-                    }
-                }
-            });
-        });
-
-        const massSlider = document.getElementById("massSlider") as HTMLInputElement;
-        const massValue = document.getElementById("massValue") as HTMLSpanElement;
-
-        massSlider.addEventListener("input", (_e) => {
-            const sliderVal = parseFloat(massSlider.value);
-            const a = 10; // larger => steeper ends, flatter center
-            const value = Math.sinh(a * sliderVal) / Math.sinh(a) * 100_000;
-            massValue.textContent = value.toFixed(1);
-            this.userBodySliderValue = value;
-            if (this.interactionMode === "body") {
-                this.sim.setUserBodyMass(this.userBodySliderValue);
-            }
-        });
-
-        window.addEventListener("keydown", (e) => {
-            if (e.key === "v") {
-                if (this.interactionMode === "body") {
-                    this.interactionMode = "camera";
-                    this.sim.setUserBodyMass(0.0);
-                    modeRadios.forEach(radio => {
-                        if (radio.value === "camera") {
-                            radio.checked = true;
-                        }
-                    });
-                } else {
-                    this.interactionMode = "body";
-                    this.sim.setUserBodyMass(this.userBodySliderValue);
-                    modeRadios.forEach(radio => {
-                        if (radio.value === "body") {
-                            radio.checked = true;
-                        }
-                    });
-                }
-            }
-        });
-    }
-
     private addNumBodiesListeners() {
         const numBodiesSelect = document.getElementById("numBodiesSelect") as HTMLInputElement;
         numBodiesSelect.addEventListener("change", () => {
@@ -153,6 +89,7 @@ export class InteractionController {
                 return;
             }
             this.sim.setNumBodies(numBodies);
+            this.renderer.updateMetadataBuffer();
         });
     }
 
