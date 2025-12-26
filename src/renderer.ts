@@ -2,7 +2,6 @@ import type { GPUCommandSource } from "./main";
 import type { Simulation } from "./simulation";
 import densityShaderCode from "./shaders/render/density.wgsl?raw";
 import toneMapShaderCode from "./shaders/render/tone_map.wgsl?raw";
-import userBodyShaderCode from "./shaders/render/user_body.wgsl?raw";
 
 
 type RenderBuffers = {
@@ -15,13 +14,11 @@ type RenderBuffers = {
 type RenderPipelines = {
     density: GPURenderPipeline;
     toneMap: GPURenderPipeline;
-    userBody: GPURenderPipeline;
 }
 
 type RenderBindGroups = {
     density: GPUBindGroup;
     toneMap: GPUBindGroup;
-    userBody: GPUBindGroup;
 };
 
 export class Renderer implements GPUCommandSource {
@@ -72,7 +69,7 @@ export class Renderer implements GPUCommandSource {
 
     private createRenderBuffers(): RenderBuffers {
         const metadataBuffer = this.device.createBuffer({
-            size: 16 * 4,
+            size: 8 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         const densityTexture = this.device.createTexture({
@@ -100,9 +97,6 @@ export class Renderer implements GPUCommandSource {
         });
         const toneMapShaderModule = this.device.createShaderModule({
             code: toneMapShaderCode,
-        });
-        const userBodyShaderModule = this.device.createShaderModule({
-            code: userBodyShaderCode,
         });
 
         const densityPipeline = this.device.createRenderPipeline({
@@ -151,33 +145,9 @@ export class Renderer implements GPUCommandSource {
             },
         });
 
-        const userBodyPipeline = this.device.createRenderPipeline({
-            layout: "auto",
-            vertex: {
-                module: userBodyShaderModule,
-                entryPoint: "vertex_main",
-            },
-            fragment: {
-                module: userBodyShaderModule,
-                entryPoint: "fragment_main",
-                targets: [{ 
-                    format: this.canvasFormat,
-                    writeMask: GPUColorWrite.ALL,
-                    blend: {
-                        color: { srcFactor: "one", dstFactor: "one", operation: "add" },
-                        alpha: { srcFactor: "one", dstFactor: "one", operation: "add", },
-                    }
-                }],
-            },
-            primitive: {
-                topology: "triangle-list",
-            },
-        });
-
         return {
             density: densityPipeline,
             toneMap: toneMapPipeline,
-            userBody: userBodyPipeline,
         };
     }
 
@@ -198,22 +168,14 @@ export class Renderer implements GPUCommandSource {
             ],
         });
 
-        const userBody = this.device.createBindGroup({
-            layout: this.pipelines.userBody.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.buffers.metadataBuffer } },
-            ],
-        });
-
         return {
             density,
             toneMap,
-            userBody,
         };
     }
 
     public updateMetadataBuffer() {
-        const metadataArray = new ArrayBuffer(16 * 4);
+        const metadataArray = new ArrayBuffer(8 * 4);
         const floatView = new Float32Array(metadataArray);
         const uintView = new Uint32Array(metadataArray);
         
@@ -223,10 +185,7 @@ export class Renderer implements GPUCommandSource {
         floatView[3] = this.camHalfSize[1];
         floatView[4] = this.viewPort[0];
         floatView[5] = this.viewPort[1];
-        floatView[6] = this.sim.getUserBodyPos()[0];
-        floatView[7] = this.sim.getUserBodyPos()[1];
-        floatView[8] = this.sim.getUserBodyMass();
-        uintView[9] = this.sim.getNumBodies();
+        uintView[6] = this.sim.getNumBodies();
 
         this.device.queue.writeBuffer(this.buffers.metadataBuffer, 0, metadataArray);
     }
@@ -364,19 +323,6 @@ export class Renderer implements GPUCommandSource {
         toneMapPass.setBindGroup(0, this.bindGroups.toneMap);
         toneMapPass.draw(3, 1, 0, 0);
         toneMapPass.end();
-
-        // third pass: render user body
-        const userBodyPass = commandEncoder.beginRenderPass({
-            colorAttachments: [{
-                view: canvasTextureView,
-                loadOp: "load",
-                storeOp: "store",
-            }],
-        });
-        userBodyPass.setPipeline(this.pipelines.userBody);
-        userBodyPass.setBindGroup(0, this.bindGroups.userBody);
-        userBodyPass.draw(6, 1, 0, 0);
-        userBodyPass.end();
 
         return commandEncoder.finish();
     }

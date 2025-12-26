@@ -1,13 +1,12 @@
 // STRUCTS
 
 struct Metadata {
-    user_body_pos: vec2<f32>,
-    user_body_mass: f32,
     num_bodies: u32,
     grav_constant: f32,
     delta_time: f32,
     epsilon_multiplier: f32,
     bh_theta: f32,
+    _pad0: u32,
 }
 
 struct NodeData {
@@ -19,7 +18,7 @@ struct NodeData {
     left_child: u32,
     right_child: u32,
     parent: u32,
-    _pad: u32,
+    _pad0: u32,
 }
 
 

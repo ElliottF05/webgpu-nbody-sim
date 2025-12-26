@@ -4,9 +4,8 @@ struct Metadata {
     cam_center: vec2<f32>,
     cam_half_size: vec2<f32>,
     viewport: vec2<f32>,
-    user_body_pos: vec2<f32>,
-    user_body_mass: f32,
     num_bodies: u32,
+    _pad0: u32,
 }
 
 struct VSOut {

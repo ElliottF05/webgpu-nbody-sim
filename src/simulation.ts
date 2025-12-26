@@ -240,14 +240,11 @@ export class Simulation implements GPUCommandSource {
         const metadataFloatView = new Float32Array(metadataArray);
         const metadataUintView = new Uint32Array(metadataArray);
 
-        metadataFloatView[0] = this.userBodyPos[0];
-        metadataFloatView[1] = this.userBodyPos[1];
-        metadataFloatView[2] = this.userBodyMass;
-        metadataUintView[3] = this.numBodies;
-        metadataFloatView[4] = this.config.gravConstant;
-        metadataFloatView[5] = this.config.deltaTime;
-        metadataFloatView[6] = this.config.epsilonMultiplier;
-        metadataFloatView[7] = this.config.bhTheta;
+        metadataUintView[0] = this.numBodies;
+        metadataFloatView[1] = this.config.gravConstant;
+        metadataFloatView[2] = this.config.deltaTime;
+        metadataFloatView[3] = this.config.epsilonMultiplier;
+        metadataFloatView[4] = this.config.bhTheta;
 
         this.device.queue.writeBuffer(this.buffers.metadata, 0, metadataArray);
     }
