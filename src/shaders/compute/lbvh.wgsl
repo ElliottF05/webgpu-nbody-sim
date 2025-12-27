@@ -190,7 +190,7 @@ fn fill_lbvh_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var count = 0u;
     while curr_idx != 0u {
         count = count + 1u;
-        if count > 200000u {
+        if count > 256u {
             break; // prevent infinite loops
         }
         let parent_idx = node_data[curr_idx].parent;
