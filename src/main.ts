@@ -23,15 +23,18 @@ async function main() {
     renderer.rebindPosBuffer(sim.getBuffers().pos);
     renderer.setNumBodies(sim.getNumBodies());
 
-    let last = performance.now();
+    let lastFrame = performance.now();
+    let lastLog = performance.now();
+    let frameCount = 0;
+
     function frame() {
         requestAnimationFrame(frame);
 
         const now = performance.now();
-        if (now - last < FRAME_DURATION_MS) {
+        if (now - lastFrame < FRAME_DURATION_MS) {
             return;
         }
-        last = now;
+        lastFrame = now;
 
         // interaction.sendUpdateToGPU();
         device.queue.submit([
@@ -39,9 +42,12 @@ async function main() {
             renderer.getCommands(sim.getNumBodies()),
         ]);
 
-        device.queue.onSubmittedWorkDone().then(() => {
-            console.log(`Frame time: ${(performance.now() - now).toFixed(2)} ms`);
-        });
+        frameCount++;
+        if (now - lastLog >= 1000) {
+            console.log(`FPS: ${frameCount}, Avg frame time: ${(1000 / frameCount).toFixed(2)} ms`);
+            frameCount = 0;
+            lastLog = now;
+        }
     }
 
     requestAnimationFrame(frame);
