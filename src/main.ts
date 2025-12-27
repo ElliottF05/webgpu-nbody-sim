@@ -31,7 +31,7 @@ async function main() {
         requestAnimationFrame(frame);
 
         const now = performance.now();
-        if (now - lastFrame < FRAME_DURATION_MS) {
+        if (now - lastFrame < 0.9 * FRAME_DURATION_MS) {
             return;
         }
         lastFrame = now;
