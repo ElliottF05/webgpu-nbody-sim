@@ -1,7 +1,6 @@
 import { type Config } from "./config";
 import lbvhShaderCode from "./shaders/compute/lbvh.wgsl?raw";
 import barnesHutShaderCode from "./shaders/compute/barnes_hut.wgsl?raw";
-import collisionShaderCode from "./shaders/compute/collision.wgsl?raw";
 // @ts-ignore
 import { RadixSortKernel } from "webgpu-radix-sort";
 
@@ -11,8 +10,6 @@ type SimBuffers = {
     mass: GPUBuffer;
     pos: GPUBuffer;
     vel: GPUBuffer;
-    posScratch: GPUBuffer;
-    velScratch: GPUBuffer;
     mortonCodes: GPUBuffer;
     bodyIndices: GPUBuffer;
     nodeData: GPUBuffer;
@@ -26,8 +23,6 @@ type SimPipelines = {
     fillLBVH: GPUComputePipeline;
     barnesHutVelStep: GPUComputePipeline;
     barnesHutPosStep: GPUComputePipeline;
-    collisionDetect: GPUComputePipeline;
-    collisionApply: GPUComputePipeline;
 };
 
 type SimBindGroups = {
@@ -36,8 +31,6 @@ type SimBindGroups = {
     fillLBVH: GPUBindGroup;
     barnesHutVelStep: GPUBindGroup;
     barnesHutPosStep: GPUBindGroup;
-    collisionDetect: GPUBindGroup;
-    collisionApply: GPUBindGroup;
 };
 
 export type SimScenario = "default" | "two-galaxies";
@@ -96,8 +89,6 @@ export class Simulation {
         const mass = createStorageBuffer(this.numBodies * 4);
         const pos = createStorageBuffer(this.numBodies * 2 * 4);
         const vel = createStorageBuffer(this.numBodies * 2 * 4);
-        const posScratch = createStorageBuffer(this.numBodies * 2 * 4);
-        const velScratch = createStorageBuffer(this.numBodies * 2 * 4);
         const mortonCodes = createStorageBuffer(this.numBodies * 4);
         const bodyIndices = createStorageBuffer(this.numBodies * 4);
 
@@ -110,8 +101,6 @@ export class Simulation {
             mass,
             pos,
             vel,
-            posScratch,
-            velScratch,
             mortonCodes,
             bodyIndices,
             nodeData,
@@ -126,9 +115,6 @@ export class Simulation {
         });
         const barnesHutShaderModule = this.device.createShaderModule({
             code: barnesHutShaderCode,
-        });
-        const collisionShaderModule = this.device.createShaderModule({
-            code: collisionShaderCode,
         });
 
         // helper to create compute pipelines
@@ -147,8 +133,6 @@ export class Simulation {
         const fillLBVH = createComputePipeline(lbvhShaderModule, "fill_lbvh_main");
         const barnesHutVelStep = createComputePipeline(barnesHutShaderModule, "bh_vel_step_main");
         const barnesHutPosStep = createComputePipeline(barnesHutShaderModule, "bh_pos_step_main");
-        const collisionDetect = createComputePipeline(collisionShaderModule, "collision_detect_main");
-        const collisionApply = createComputePipeline(collisionShaderModule, "collision_apply_main");
 
         // use external radix sort library for sorting morton codes
         const sortMorton = new RadixSortKernel({
@@ -168,8 +152,6 @@ export class Simulation {
             fillLBVH,
             barnesHutVelStep,
             barnesHutPosStep,
-            collisionDetect,
-            collisionApply,
         };
     }
 
@@ -224,32 +206,6 @@ export class Simulation {
                 { binding: 5, resource: { buffer: this.buffers.bodyIndices } },
             ]
         });
-        const collisionDetect = this.device.createBindGroup({
-            layout: this.pipelines.collisionDetect.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.buffers.metadata } },
-                { binding: 1, resource: { buffer: this.buffers.mass } },
-                { binding: 2, resource: { buffer: this.buffers.pos } },
-                { binding: 3, resource: { buffer: this.buffers.vel } },
-                { binding: 4, resource: { buffer: this.buffers.posScratch } },
-                { binding: 5, resource: { buffer: this.buffers.velScratch } },
-                { binding: 6, resource: { buffer: this.buffers.bodyIndices } },
-                { binding: 7, resource: { buffer: this.buffers.nodeData } },
-            ]
-        });
-        const collisionApply = this.device.createBindGroup({
-            layout: this.pipelines.collisionApply.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.buffers.metadata } },
-                // { binding: 1, resource: { buffer: this.buffers.mass } },
-                { binding: 2, resource: { buffer: this.buffers.pos } },
-                { binding: 3, resource: { buffer: this.buffers.vel } },
-                { binding: 4, resource: { buffer: this.buffers.posScratch } },
-                { binding: 5, resource: { buffer: this.buffers.velScratch } },
-                { binding: 6, resource: { buffer: this.buffers.bodyIndices } },
-                // { binding: 7, resource: { buffer: this.buffers.nodeData } },
-            ]
-        });
 
         return {
             computeMorton,
@@ -257,8 +213,6 @@ export class Simulation {
             fillLBVH,
             barnesHutVelStep,
             barnesHutPosStep,
-            collisionDetect,
-            collisionApply,
         };
     }
 
@@ -301,7 +255,7 @@ export class Simulation {
 
                 // position
                 const angle = Math.random() * 2.0 * Math.PI;
-                const r = 10.0 * radius * Math.sqrt(Math.random());
+                const r = radius * Math.sqrt(Math.random());
                 const x = r * Math.cos(angle);
                 const y = r * Math.sin(angle);
                 posData[i * 2 + 0] = x;
@@ -312,8 +266,8 @@ export class Simulation {
                 const speed = speedFactor * Math.sqrt(this.config.gravConstant * this.numBodies / dist);
                 const vx = -speed * (y / dist);
                 const vy = speed * (x / dist);
-                velData[i * 2 + 0] = 0 * vx;
-                velData[i * 2 + 1] = 0 * vy;
+                velData[i * 2 + 0] = vx;
+                velData[i * 2 + 1] = vy;
             }
         } else if (scenario === "two-galaxies") {
             // two orbiting galaxies
@@ -407,16 +361,6 @@ export class Simulation {
             // barnes-hut position step
             computePass.setPipeline(this.pipelines.barnesHutPosStep);
             computePass.setBindGroup(0, this.bindGroups.barnesHutPosStep);
-            computePass.dispatchWorkgroups(dispatchCount);
-
-            // collision detection step (writes to scratch buffers)
-            computePass.setPipeline(this.pipelines.collisionDetect);
-            computePass.setBindGroup(0, this.bindGroups.collisionDetect);
-            computePass.dispatchWorkgroups(dispatchCount);
-
-            // collision apply step (copies scratch buffers back to main buffers)
-            computePass.setPipeline(this.pipelines.collisionApply);
-            computePass.setBindGroup(0, this.bindGroups.collisionApply);
             computePass.dispatchWorkgroups(dispatchCount);
         }
 
